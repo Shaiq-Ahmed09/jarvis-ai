@@ -1951,6 +1951,13 @@ body {
       <button class="drawer-close" onclick="closeArDrawer()" title="Close AR Radar">&times;</button>
     </div>
   </div>
+  <div style="padding: 10px 18px 0; display: flex; flex-direction: column; gap: 6px;">
+    <div style="font-size: 10px; font-family: var(--font-hud); color: var(--dim); display: flex; justify-content: space-between;">
+      <span>2.5D DESKTOP SPATIAL RADAR MATRIX</span>
+      <span style="color: var(--cyan); font-family: var(--font-mono); font-size: 9px;" id="ar-canvas-focused-tag">CLICK RECTANGLE TO FOCUS</span>
+    </div>
+    <canvas id="ar-radar-canvas" width="464" height="150" style="background: rgba(1, 10, 20, 0.9); border: 1px solid rgba(0, 240, 255, 0.25); border-radius: 4px; cursor: crosshair;"></canvas>
+  </div>
   <div class="ar-window-list" id="ar-window-list">
     <!-- Populated dynamically via renderArWindows() -->
   </div>
@@ -4991,15 +4998,19 @@ function renderBiometricTelemetry(m) {
     if (m.valence_state === 'ALERT_CRITICAL') {
       badge.style.background = 'rgba(255, 40, 64, 0.25)';
       badge.style.color = 'var(--red)';
+      document.documentElement.style.setProperty('--cyan', '#ff2840');
     } else if (m.valence_state === 'ELEVATED_STRESS') {
       badge.style.background = 'rgba(255, 170, 0, 0.25)';
       badge.style.color = 'var(--amber)';
+      document.documentElement.style.setProperty('--cyan', '#ffaa00');
     } else if (m.valence_state === 'OPTIMAL_FLOW') {
       badge.style.background = 'rgba(0, 255, 136, 0.25)';
       badge.style.color = 'var(--emerald)';
+      document.documentElement.style.setProperty('--cyan', '#00ff88');
     } else {
       badge.style.background = 'rgba(0, 240, 255, 0.2)';
       badge.style.color = 'var(--cyan)';
+      document.documentElement.style.setProperty('--cyan', '#00f0ff');
     }
   }
 
@@ -5135,6 +5146,8 @@ function renderArWindows(data) {
   const windows = data.windows || [];
   if (badge) badge.textContent = `${windows.length} WINDOWS`;
 
+  renderArRadarCanvas(windows, data.display);
+
   list.innerHTML = '';
   if (windows.length === 0) {
     list.innerHTML = '<div style="font-size: 11px; color: var(--dim); padding: 12px; text-align: center;">No active top-level desktop windows detected, Sir.</div>';
@@ -5167,6 +5180,99 @@ function renderArWindows(data) {
     `;
     list.appendChild(card);
   });
+}
+
+let currentArWindows = [];
+let arCanvasBoundListener = false;
+
+function renderArRadarCanvas(windows, display) {
+  const canvas = document.getElementById('ar-radar-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const cw = canvas.width;
+  const ch = canvas.height;
+  currentArWindows = windows || [];
+
+  const screenW = (display && display.w) ? display.w : 1920;
+  const screenH = (display && display.h) ? display.h : 1080;
+
+  ctx.clearRect(0, 0, cw, ch);
+
+  // Monitor perspective grid
+  ctx.strokeStyle = 'rgba(0, 240, 255, 0.12)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x = 0; x < cw; x += 40) {
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, ch);
+  }
+  for (let y = 0; y < ch; y += 30) {
+    ctx.moveTo(0, y);
+    ctx.lineTo(cw, y);
+  }
+  ctx.stroke();
+
+  // Desktop outer frame
+  ctx.strokeStyle = 'rgba(0, 240, 255, 0.4)';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(4, 4, cw - 8, ch - 8);
+
+  // Render spatial windows
+  windows.forEach(w => {
+    const r = w.rect;
+    if (!r) return;
+    const nx = Math.max(0, Math.min(1, r.x / screenW));
+    const ny = Math.max(0, Math.min(1, r.y / screenH));
+    const nw = Math.max(0.05, Math.min(1, r.w / screenW));
+    const nh = Math.max(0.06, Math.min(1, r.h / screenH));
+
+    const bx = 4 + nx * (cw - 8);
+    const by = 4 + ny * (ch - 8);
+    const bw = nw * (cw - 8);
+    const bh = nh * (ch - 8);
+
+    w._canvasRect = { x: bx, y: by, w: bw, h: bh };
+
+    if (w.is_focused) {
+      ctx.fillStyle = 'rgba(0, 255, 136, 0.3)';
+      ctx.strokeStyle = '#00ff88';
+      ctx.lineWidth = 2;
+    } else {
+      ctx.fillStyle = 'rgba(0, 240, 255, 0.14)';
+      ctx.strokeStyle = '#00f0ff';
+      ctx.lineWidth = 1;
+    }
+
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.strokeRect(bx, by, bw, bh);
+
+    ctx.fillStyle = w.is_focused ? '#00ff88' : '#00f0ff';
+    ctx.font = '9px monospace';
+    const label = (w.title || 'App').substring(0, 14);
+    ctx.fillText(label, bx + 3, by + 11);
+  });
+
+  if (!arCanvasBoundListener) {
+    arCanvasBoundListener = true;
+    canvas.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const clickX = (e.clientX - rect.left) * scaleX;
+      const clickY = (e.clientY - rect.top) * scaleY;
+
+      for (let i = currentArWindows.length - 1; i >= 0; i--) {
+        const win = currentArWindows[i];
+        const cr = win._canvasRect;
+        if (cr && clickX >= cr.x && clickX <= cr.x + cr.w && clickY >= cr.y && clickY <= cr.y + cr.h) {
+          arWindowAction(win.hwnd, 'focus');
+          const focusedTag = document.getElementById('ar-canvas-focused-tag');
+          if (focusedTag) focusedTag.textContent = `LOCKED: ${win.title.substring(0, 18)}`;
+          break;
+        }
+      }
+    });
+  }
 }
 
 function arWindowAction(hwnd, action) {
