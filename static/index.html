@@ -312,6 +312,202 @@ body {
   50% { border-color: rgba(255, 170, 0, 0.95); box-shadow: 0 0 18px rgba(255, 170, 0, 0.5); }
 }
 
+/* Document Picture-in-Picture Floating Corner Bubble Styles */
+.pip-container {
+  width: 100%;
+  height: 100vh;
+  box-sizing: border-box;
+  background: radial-gradient(circle at 50% 20%, rgba(0, 240, 255, 0.12) 0%, rgba(2, 7, 14, 0.98) 75%);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--txt, #e0f7fa);
+  font-family: var(--font-body, system-ui, sans-serif);
+  overflow: hidden;
+  box-shadow: inset 0 0 25px rgba(0, 240, 255, 0.08);
+}
+
+.pip-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+  padding-bottom: 6px;
+}
+
+.pip-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-hud, monospace);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: var(--cyan, #00f0ff);
+  font-weight: 700;
+}
+
+.pip-dot {
+  width: 7px;
+  height: 7px;
+  background: var(--emerald, #00ff88);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--emerald, #00ff88);
+  animation: pulse-dot 1.5s infinite;
+}
+
+.pip-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.pip-icon-btn {
+  background: rgba(0, 240, 255, 0.1);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  color: var(--cyan, #00f0ff);
+  border-radius: 4px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.pip-icon-btn:hover {
+  background: var(--cyan, #00f0ff);
+  color: #000;
+}
+
+.pip-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pip-arc-wrapper {
+  margin: 4px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pip-arc-orb {
+  position: relative;
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle, rgba(0, 240, 255, 0.15) 0%, rgba(0, 0, 0, 0.8) 70%);
+  box-shadow: 0 0 25px rgba(0, 240, 255, 0.3);
+  transition: all 0.3s ease;
+}
+
+.pip-ring-outer {
+  position: absolute;
+  inset: 0;
+  border: 2px dashed rgba(0, 240, 255, 0.6);
+  border-radius: 50%;
+  animation: spin-cw 12s linear infinite;
+}
+
+.pip-ring-inner {
+  position: absolute;
+  inset: 12px;
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  border-top-color: var(--cyan, #00f0ff);
+  border-bottom-color: var(--cyan, #00f0ff);
+  border-radius: 50%;
+  animation: spin-ccw 6s linear infinite;
+}
+
+.pip-core {
+  position: absolute;
+  inset: 24px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffffff 0%, var(--cyan, #00f0ff) 50%, transparent 100%);
+  box-shadow: 0 0 15px var(--cyan, #00f0ff);
+  animation: core-fast-breathe 1.5s infinite alternate;
+  transition: all 0.3s ease;
+}
+
+.pip-arc-orb.listening .pip-core {
+  background: radial-gradient(circle, #ffffff 0%, var(--amber, #ffaa00) 50%, transparent 100%);
+  box-shadow: 0 0 20px var(--amber, #ffaa00);
+}
+.pip-arc-orb.listening .pip-ring-outer {
+  border-color: var(--amber, #ffaa00);
+}
+
+.pip-arc-orb.speaking .pip-core {
+  background: radial-gradient(circle, #ffffff 0%, var(--amber, #ffaa00) 50%, transparent 100%);
+  box-shadow: 0 0 25px var(--amber, #ffaa00);
+}
+
+.pip-arc-orb.recording .pip-core {
+  background: radial-gradient(circle, #ffffff 0%, var(--red, #ff3344) 50%, transparent 100%);
+  box-shadow: 0 0 25px var(--red, #ff3344);
+}
+.pip-arc-orb.recording .pip-ring-outer {
+  border-color: var(--red, #ff3344);
+}
+
+.pip-speech-hud {
+  width: 100%;
+  min-height: 28px;
+  background: rgba(0, 255, 136, 0.08);
+  border: 1px solid rgba(0, 255, 136, 0.3);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  color: var(--emerald, #00ff88);
+  text-align: center;
+  word-break: break-word;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pip-speech-hud.listening {
+  color: var(--amber, #ffaa00);
+  border-color: var(--amber, #ffaa00);
+  background: rgba(255, 170, 0, 0.12);
+  box-shadow: 0 0 10px rgba(255, 170, 0, 0.3);
+}
+
+.pip-transcript-box {
+  width: 100%;
+  max-height: 80px;
+  overflow-y: auto;
+  background: rgba(2, 10, 20, 0.7);
+  border: 1px solid rgba(0, 240, 255, 0.18);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #cfd8dc;
+  scrollbar-width: thin;
+}
+
+.pip-controls {
+  width: 100%;
+}
+
+.pip-mic-btn {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+
 .controls-card {
   width: 100%;
   display: flex;
@@ -1144,6 +1340,11 @@ body {
       </div>
 
       <div class="toggle-row">
+        <label for="pip-auto-toggle" style="color: var(--cyan); font-weight: 600;">🔮 Auto-Float on Tab Switch</label>
+        <input type="checkbox" id="pip-auto-toggle" checked>
+      </div>
+
+      <div class="toggle-row">
         <label for="offline-toggle" style="color: var(--amber); font-weight: 600;">Offline Local Failover (Ollama)</label>
         <input type="checkbox" id="offline-toggle">
       </div>
@@ -1170,6 +1371,7 @@ body {
     <span>J.A.R.V.I.S. // FULL HANDS-ON PC INTERFACE</span>
     <div style="display: flex; align-items: center; gap: 8px;">
       <button class="stark-btn mini" id="sfx-toggle-btn" onclick="toggleSFX()" title="Synthesized Cybernetic Sound FX">🔊 SFX: ON</button>
+      <button class="stark-btn mini" id="pip-btn" onclick="toggleFloatingBubble()" title="Pop-out Attentive Corner Bubble">🔮 FLOATING BUBBLE</button>
       <button class="stark-btn mini" onclick="clearChatLog()" title="Clear Chat Stream">🧹 CLEAR</button>
       <button class="stark-btn mini" onclick="openMemoryDrawer()" title="Open Persistent Vector Memory Cortex">🧠 CORTEX</button>
       <span style="font-family: var(--font-mono); font-size: 10px; color: var(--emerald);" id="auth-status-tag">AUTONOMY: MAXIMUM</span>
@@ -1847,21 +2049,27 @@ function updateMicHUDIndicator(active) {
   const hudText = $('#speech-hud-text');
   const hud = $('#speech-hud');
   if (!hudText) return;
-  if (isRecording) return;
+  if (isRecording) {
+    updatePiPHUD('🔴 Listening... Pause speaking to send', 'recording', false, false, true);
+    return;
+  }
   if (isAwaitingVoiceCommand) {
     hudText.textContent = '⚡ YES, SIR? SPEAK YOUR COMMAND...';
     hudText.style.color = 'var(--amber)';
     if (hud) hud.className = 'listening';
+    updatePiPHUD('⚡ YES, SIR? SPEAK YOUR COMMAND...', 'listening', true, false, false);
     return;
   }
   if (active && wakeWordActive) {
     hudText.textContent = '🟢 ALWAYS-ON MIC ACTIVE // SAY "JARVIS"';
     hudText.style.color = 'var(--emerald)';
     if (hud) hud.className = '';
+    updatePiPHUD('🟢 ATTENTIVE // SAY "JARVIS"', '', false, false, false);
   } else if (!wakeWordActive) {
     hudText.textContent = '🎙️ Always-On Mic paused. Click or hold to speak.';
     hudText.style.color = 'var(--dim)';
     if (hud) hud.className = 'empty';
+    updatePiPHUD('🎙️ Mic Paused // Tap Speak', '', false, false, false);
   }
 }
 
@@ -1917,6 +2125,8 @@ function executeVocalCommand(cmd) {
   $('#speech-hud-text').textContent = `⚡ DISPATCHING: "${cmd}"`;
   $('#speech-hud').className = '';
   $('#arc').classList.add('speaking');
+  updatePiPHUD(`⚡ DISPATCHING: "${cmd}"`, '', false, true, false);
+  updatePiPReply('Sir: ' + cmd);
   appendDiagLog(`Voice Sentinel dispatched command: "${cmd}"`);
   submitTask(cmd);
 }
@@ -1986,6 +2196,7 @@ function initWakeWordListener() {
           $('#speech-hud-text').textContent = `⚡ YES, SIR: "${cleanCommand}"`;
           $('#speech-hud').className = 'listening';
           $('#arc').classList.add('speaking');
+          updatePiPHUD(`⚡ YES, SIR: "${cleanCommand}"`, 'listening', true, false, false);
 
           if (isAnyFinal) {
             executeVocalCommand(lastTranscribedCommand);
@@ -2013,6 +2224,7 @@ function initWakeWordListener() {
         $('#speech-hud-text').textContent = `⚡ DIRECT COMMAND: "${parsed.command}"`;
         $('#speech-hud').className = 'listening';
         $('#arc').classList.add('speaking');
+        updatePiPHUD(`⚡ COMMAND: "${parsed.command}"`, 'listening', true, false, false);
 
         if (isAnyFinal) {
           executeVocalCommand(lastTranscribedCommand);
@@ -2032,6 +2244,7 @@ function initWakeWordListener() {
             $('#speech-hud-text').textContent = '⚡ YES, SIR? SPEAK YOUR COMMAND...';
             $('#speech-hud').className = 'listening';
             $('#arc').classList.add('speaking');
+            updatePiPHUD('⚡ YES, SIR? SPEAK YOUR COMMAND...', 'listening', true, false, false);
             appendDiagLog("Acoustic Sentinel awakened: Standing by for Sir's command...");
 
             if (followUpTimeoutTimer) clearTimeout(followUpTimeoutTimer);
@@ -2174,6 +2387,199 @@ window.addEventListener('keyup', e => {
   }
 });
 
+// ---------------------------------------------------------------------
+// DOCUMENT PICTURE-IN-PICTURE FLOATING CORNER BUBBLE (TAB-SWITCH ATTENTIVE)
+// ---------------------------------------------------------------------
+let pipWindow = null;
+
+function updatePiPHUD(text, styleClass, isOrbListening, isOrbSpeaking, isOrbRecording) {
+  if (!pipWindow || pipWindow.closed) return;
+  try {
+    const pText = pipWindow.document.getElementById('pip-speech-text');
+    const pHud = pipWindow.document.getElementById('pip-speech-hud');
+    const pOrb = pipWindow.document.getElementById('pip-orb');
+    const pBtn = pipWindow.document.getElementById('pip-mic-btn');
+    const pLabel = pipWindow.document.getElementById('pip-mic-label');
+
+    if (pText && text) pText.textContent = text;
+    if (pHud) {
+      pHud.className = 'pip-speech-hud' + (styleClass ? ' ' + styleClass : '');
+    }
+    if (pOrb) {
+      pOrb.className = 'pip-arc-orb';
+      if (isOrbRecording) pOrb.classList.add('recording');
+      else if (isOrbSpeaking) pOrb.classList.add('speaking');
+      else if (isOrbListening) pOrb.classList.add('listening');
+    }
+    if (pBtn && pLabel) {
+      if (isRecording) {
+        pBtn.classList.add('recording');
+        pLabel.textContent = 'RECORDING... (TAP TO SEND)';
+      } else {
+        pBtn.classList.remove('recording');
+        pLabel.textContent = 'CLICK TO SPEAK';
+      }
+    }
+  } catch (e) {}
+}
+
+function updatePiPReply(text) {
+  if (!pipWindow || pipWindow.closed) return;
+  try {
+    const pReply = pipWindow.document.getElementById('pip-latest-reply');
+    if (pReply && text) {
+      pReply.textContent = text;
+    }
+  } catch (e) {}
+}
+
+async function openFloatingBubble(isAuto = false) {
+  if (!('documentPictureInPicture' in window)) {
+    if (!isAuto) {
+      appendDiagLog("Document Picture-in-Picture not supported in this browser engine.");
+      alert("Document Picture-in-Picture requires Microsoft Edge or Google Chrome (v116+).");
+    }
+    return;
+  }
+
+  if (pipWindow && !pipWindow.closed) {
+    try { pipWindow.focus(); } catch (e) {}
+    return;
+  }
+
+  try {
+    pipWindow = await window.documentPictureInPicture.requestWindow({
+      width: 320,
+      height: 380,
+    });
+
+    // Mirror all CSS stylesheets into the PiP window head
+    [...document.styleSheets].forEach((sheet) => {
+      try {
+        const rules = [...sheet.cssRules].map((r) => r.cssText).join('');
+        const style = document.createElement('style');
+        style.textContent = rules;
+        pipWindow.document.head.appendChild(style);
+      } catch (e) {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.type = sheet.type;
+        link.media = sheet.media;
+        link.href = sheet.href;
+        pipWindow.document.head.appendChild(link);
+      }
+    });
+
+    pipWindow.document.body.style.margin = '0';
+    pipWindow.document.body.style.padding = '0';
+    pipWindow.document.body.style.background = '#02070e';
+    pipWindow.document.body.style.overflow = 'hidden';
+
+    const latestReply = document.querySelector('.bubble.jarvis:last-child')?.textContent?.trim() ||
+      'Good day, Sir. Acoustic sentinel is attentive.';
+
+    pipWindow.document.body.innerHTML = `
+      <div class="pip-container">
+        <div class="pip-header">
+          <div class="pip-title">
+            <span class="pip-dot"></span>
+            <span>J.A.R.V.I.S. // SENTINEL</span>
+          </div>
+          <div class="pip-actions">
+            <button class="pip-icon-btn" id="pip-focus-btn" title="Focus Dashboard">↗</button>
+            <button class="pip-icon-btn" id="pip-close-btn" title="Close Bubble">✕</button>
+          </div>
+        </div>
+
+        <div class="pip-body">
+          <div class="pip-arc-wrapper">
+            <div class="pip-arc-orb" id="pip-orb">
+              <div class="pip-ring-outer"></div>
+              <div class="pip-ring-inner"></div>
+              <div class="pip-core"></div>
+            </div>
+          </div>
+
+          <div class="pip-speech-hud" id="pip-speech-hud">
+            <span id="pip-speech-text">${$('#speech-hud-text')?.textContent || '🟢 ATTENTIVE // SAY "JARVIS"'}</span>
+          </div>
+
+          <div class="pip-transcript-box" id="pip-transcript-box">
+            <div class="pip-transcript-text" id="pip-latest-reply">${latestReply}</div>
+          </div>
+
+          <div class="pip-controls">
+            <button class="stark-btn primary-mic pip-mic-btn" id="pip-mic-btn">
+              <span id="pip-mic-icon">🎙</span> <span id="pip-mic-label">CLICK TO SPEAK</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    pipWindow.document.getElementById('pip-close-btn').onclick = () => {
+      pipWindow.close();
+    };
+
+    pipWindow.document.getElementById('pip-focus-btn').onclick = () => {
+      window.focus();
+    };
+
+    const pMic = pipWindow.document.getElementById('pip-mic-btn');
+    pMic.onclick = () => {
+      if (isRecording) {
+        stopAudioCapture();
+      } else {
+        startAudioCapture();
+      }
+    };
+
+    pipWindow.addEventListener('pagehide', () => {
+      pipWindow = null;
+      const b = $('#pip-btn');
+      if (b) b.textContent = '🔮 FLOATING BUBBLE';
+      appendDiagLog("Corner Floating Sentinel closed.");
+    });
+
+    const b = $('#pip-btn');
+    if (b) b.textContent = '📌 BUBBLE ACTIVE';
+    appendDiagLog("Corner Floating Sentinel engaged. Attentive across all applications.");
+    playSound('beep');
+  } catch (err) {
+    console.warn("Floating bubble initialization notice:", err);
+    if (!isAuto) {
+      appendDiagLog(`Floating bubble notice: ${err.message}`);
+    }
+  }
+}
+
+function toggleFloatingBubble() {
+  if (pipWindow && !pipWindow.closed) {
+    pipWindow.close();
+    pipWindow = null;
+    const b = $('#pip-btn');
+    if (b) b.textContent = '🔮 FLOATING BUBBLE';
+  } else {
+    openFloatingBubble(false);
+  }
+}
+
+// Auto-Float on Tab Switch / Background Transition
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    appendDiagLog("Workstation context switched to background. Sentinel attentive.");
+    if (wakeWordActive && !isSpeechRecognizing && !isRecording && (!currentAudioPlayer || currentAudioPlayer.paused)) {
+      safeStartSpeechRecognition();
+    }
+    const autoFloatCheck = $('#pip-auto-toggle');
+    if (autoFloatCheck && autoFloatCheck.checked && (!pipWindow || pipWindow.closed)) {
+      openFloatingBubble(true);
+    }
+  } else {
+    appendDiagLog("Workstation context focused on J.A.R.V.I.S. Core.");
+  }
+});
+
 function sendWS(obj) {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(obj));
@@ -2191,6 +2597,7 @@ function appendChat(role, text, id) {
     if (existing) {
       existing.textContent = text;
       $('#chat-log').scrollTop = 1e9;
+      if (role === 'jarvis') updatePiPReply(text);
       return existing;
     }
   }
@@ -2200,6 +2607,12 @@ function appendChat(role, text, id) {
   d.textContent = text;
   $('#chat-log').appendChild(d);
   $('#chat-log').scrollTop = 1e9;
+  if (role === 'jarvis') {
+    updatePiPReply(text);
+    updatePiPHUD('⚡ J.A.R.V.I.S. ONLINE', '', false, false, false);
+  } else if (role === 'user') {
+    updatePiPReply('Sir: ' + text);
+  }
   return d;
 }
 

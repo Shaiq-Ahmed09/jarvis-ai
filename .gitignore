@@ -25,6 +25,7 @@ data/chroma/
 data/audio_cache/
 data/story_*.jpg
 data/*.png
+cortex_db/
 
 # Portable Binaries & Development Tools
 tools/
