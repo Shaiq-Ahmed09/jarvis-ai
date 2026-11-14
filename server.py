@@ -84,6 +84,7 @@ from core.voice_clone import get_voice_biometrics
 from core.audio_cache import clear_audio_cache
 from core.focus_mode import get_focus_guardian
 from core.mood_analyzer import get_mood_analyzer, get_mood_vigil
+from core.hud_theme import get_hud_theme_manager
 
 # Active WebSocket session registry for proactive broadcasting
 ACTIVE_SESSIONS = set()
@@ -291,6 +292,10 @@ TOOLS = [
          {"action": {"type": "string", "enum": ["acoustic_relax", "tea_break", "dim_lighting", "empathic_venting"], "description": "Comfort action to execute."},
           "comfort_notes": {"type": "string", "description": "Personalized compassionate notes for Sir."}},
          ["action"]),
+    tool("configure_hud_theme", "Configure the Stark HUD aesthetic theme and visual presentation: 'theme_id' ('executive_minimal', 'mark_vii_classic', 'stealth_tactical', 'sol_amber_overwatch'), 'density_mode' ('compact', 'normal', 'spacious').",
+         {"theme_id": {"type": "string", "enum": ["executive_minimal", "mark_vii_classic", "stealth_tactical", "sol_amber_overwatch"], "description": "Aesthetic preset ID."},
+          "density_mode": {"type": "string", "enum": ["compact", "normal", "spacious"], "description": "UI layout density mode."}}),
+    tool("get_hud_theme", "Retrieve current HUD aesthetic theme variables, color accents, and active preset details."),
 ]
 
 def get_telemetry():
@@ -476,12 +481,14 @@ def is_deterministic_fast_path(name: str, args: dict) -> bool:
         return True
     if name == "toggle_focus_mode":
         return True
-    if name in ["stop_mood_call", "trigger_comfort_protocol"]:
+    if name in ["stop_mood_call", "trigger_comfort_protocol", "configure_hud_theme", "get_hud_theme"]:
         return True
     return False
 
 def get_fast_ack_phrase(name: str, args: dict) -> str:
     """Return instant acknowledgment phrase from pre-warmed audio cache (0ms synthesis)."""
+    if name == "configure_hud_theme":
+        return "HUD aesthetic theme recalibrated, Sir."
     if name == "stop_mood_call":
         return "Mood video call disengaged, Sir. I remain standing by."
     if name == "trigger_comfort_protocol":
@@ -549,6 +556,18 @@ def extract_action_intent(text: str):
         return ("stop_mood_call", {})
     if any(k in t for k in ["i am feeling down", "i feel sad", "had a rough day", "bad day today", "i feel exhausted", "comfort me", "im sad", "i am sad"]):
         return ("trigger_comfort_protocol", {"action": "empathic_venting", "comfort_notes": "Sir expressed feeling down."})
+
+    # Aesthetic HUD Theme Intents
+    if any(k in t for k in ["change theme", "switch theme", "cycle theme", "next theme", "toggle theme"]):
+        return ("configure_hud_theme", {"theme_id": "executive_minimal"})
+    if any(k in t for k in ["executive theme", "minimal theme", "executive minimal"]):
+        return ("configure_hud_theme", {"theme_id": "executive_minimal"})
+    if any(k in t for k in ["classic theme", "mark vii theme", "stark classic"]):
+        return ("configure_hud_theme", {"theme_id": "mark_vii_classic"})
+    if any(k in t for k in ["stealth theme", "carbon theme", "tactical theme"]):
+        return ("configure_hud_theme", {"theme_id": "stealth_tactical"})
+    if any(k in t for k in ["amber theme", "sol theme", "overwatch theme", "gold theme"]):
+        return ("configure_hud_theme", {"theme_id": "sol_amber_overwatch"})
 
     if t in ["maximize", "maximize window", "maximize screen"]:
         return ("manage_window", {"action": "maximize"})
@@ -1736,6 +1755,19 @@ class JarvisSession:
                 return f"Comfort protocol 'dim_lighting' activated: HUD optical glare softened for Sir."
             return f"Comfort protocol 'empathic_venting' engaged: J.A.R.V.I.S. attentive and ready to listen."
 
+        if name == "configure_hud_theme":
+            mgr = get_hud_theme_manager()
+            tid = args.get("theme_id", "executive_minimal")
+            density = args.get("density_mode")
+            theme_data = mgr.set_theme(tid, density)
+            await self.send(type="hud_theme_update", **theme_data)
+            return f"HUD theme set to '{theme_data['name']}' ({theme_data['active_id']}). Aesthetics synchronized."
+
+        if name == "get_hud_theme":
+            theme_data = get_hud_theme_manager().get_active_theme()
+            await self.send(type="hud_theme_update", **theme_data)
+            return f"Active HUD theme: '{theme_data['name']}', density mode '{theme_data['density_mode']}'."
+
         return "Unknown command requested."
 
     async def turn(self, user_text: str):
@@ -2055,6 +2087,7 @@ async def websocket_handler(ws: WebSocket):
     await session.send(type="voice_profiles_data", profiles=vb.list_profiles(), active_id=vb.active_profile_id)
     await session.send(type="focus_mode_status", **get_focus_guardian().get_status())
     await session.send(type="mood_vigil_status", **get_mood_vigil().get_status())
+    await session.send(type="hud_theme_update", **get_hud_theme_manager().get_active_theme())
     
     # Restore persistent chat history across page refresh from SQLite cortex
     try:
@@ -2244,6 +2277,17 @@ async def websocket_handler(ws: WebSocket):
 
             elif msg_type == "get_mood_status":
                 await session.send(type="mood_vigil_status", **get_mood_vigil().get_status())
+
+            elif msg_type == "get_hud_theme":
+                await session.send(type="hud_theme_update", **get_hud_theme_manager().get_active_theme())
+
+            elif msg_type == "set_hud_theme":
+                theme_data = get_hud_theme_manager().set_theme(data.get("theme_id"), data.get("density_mode"))
+                await session.send(type="hud_theme_update", **theme_data)
+
+            elif msg_type == "cycle_hud_theme":
+                theme_data = get_hud_theme_manager().cycle_next_theme()
+                await session.send(type="hud_theme_update", **theme_data)
 
             elif msg_type == "approve":
                 aid = data.get("id")
