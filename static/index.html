@@ -1351,6 +1351,11 @@ body {
       </div>
 
       <div class="toggle-row">
+        <label for="native-voice-toggle" style="color: var(--cyan); font-weight: 600;" title="Uses local Windows browser speech engine for instantaneous 0ms audio">⚡ Instant Native Voice (0ms)</label>
+        <input type="checkbox" id="native-voice-toggle">
+      </div>
+
+      <div class="toggle-row">
         <label for="wake-toggle" style="color: var(--emerald); font-weight: 600;">🟢 Always-On Mic ("Jarvis")</label>
         <input type="checkbox" id="wake-toggle" checked>
       </div>
@@ -2629,6 +2634,7 @@ function appendChat(role, text, id) {
   d.textContent = text;
   $('#chat-log').appendChild(d);
   $('#chat-log').scrollTop = 1e9;
+  virtualizeChatLog();
   if (role === 'jarvis') {
     updatePiPReply(text);
     updatePiPHUD('⚡ J.A.R.V.I.S. ONLINE', '', false, false, false);
@@ -2637,6 +2643,146 @@ function appendChat(role, text, id) {
   }
   return d;
 }
+
+function virtualizeChatLog() {
+  const log = $('#chat-log');
+  if (log && log.children.length > 60) {
+    while (log.children.length > 60) {
+      log.removeChild(log.firstElementChild);
+    }
+  }
+}
+
+let currentStreamBubble = null;
+let currentStreamMsgId = null;
+
+function appendStreamChat(role, textChunk, msgId, chunkIndex) {
+  if (currentStreamMsgId !== msgId || !currentStreamBubble) {
+    currentStreamBubble = document.createElement('div');
+    currentStreamBubble.className = `bubble ${role}`;
+    currentStreamBubble.id = 'msg-' + msgId;
+    $('#chat-log').appendChild(currentStreamBubble);
+    currentStreamMsgId = msgId;
+  }
+  
+  if (chunkIndex === 0) {
+    currentStreamBubble.textContent = textChunk;
+  } else {
+    currentStreamBubble.textContent += ' ' + textChunk;
+  }
+  $('#chat-log').scrollTop = 1e9;
+  virtualizeChatLog();
+  if (role === 'jarvis') updatePiPReply(currentStreamBubble.textContent);
+}
+
+function speakInstantNative(text) {
+  if (!window.speechSynthesis) return false;
+  window.speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.rate = 1.06;
+  utter.pitch = 0.95;
+  
+  const voices = window.speechSynthesis.getVoices();
+  const ukVoice = voices.find(v => v.lang === 'en-GB' && (v.name.includes('Ryan') || v.name.includes('George') || v.name.includes('Natural') || v.name.includes('Oliver') || v.name.includes('Male'))) ||
+                  voices.find(v => v.lang === 'en-GB') ||
+                  voices.find(v => v.lang.startsWith('en'));
+  if (ukVoice) utter.voice = ukVoice;
+
+  utter.onstart = () => {
+    safeStopSpeechRecognition();
+    $('#arc').classList.add('speaking');
+    $('#status-badge').textContent = 'INSTANT LOCAL VOCAL SYNTHESIS';
+    $('#status-badge').style.color = 'var(--amber)';
+  };
+  utter.onend = utter.onerror = () => {
+    $('#arc').classList.remove('speaking');
+    $('#status-badge').textContent = 'SYSTEM NOMINAL // STANDBY';
+    $('#status-badge').style.color = 'var(--cyan)';
+    scheduleWakeRestart(350);
+    updateMicHUDIndicator(true);
+  };
+
+  window.speechSynthesis.speak(utter);
+  return true;
+}
+
+class AudioStreamQueue {
+  constructor() {
+    this.queue = [];
+    this.isPlaying = false;
+    this.currentAudio = null;
+    this.activeMsgId = null;
+  }
+
+  reset() {
+    if (this.currentAudio) {
+      try { this.currentAudio.pause(); } catch(e) {}
+      this.currentAudio = null;
+    }
+    this.queue = [];
+    this.isPlaying = false;
+    this.activeMsgId = null;
+  }
+
+  enqueue(chunkIndex, b64Audio, msgId) {
+    if (!$('#tts-toggle').checked) return;
+    if (this.activeMsgId && this.activeMsgId !== msgId) {
+      this.reset();
+    }
+    this.activeMsgId = msgId;
+    this.queue.push({ chunkIndex, b64Audio });
+    this.queue.sort((a, b) => a.chunkIndex - b.chunkIndex);
+
+    if (!this.isPlaying) {
+      this.playNext();
+    }
+  }
+
+  playNext() {
+    if (this.queue.length === 0) {
+      this.isPlaying = false;
+      this.currentAudio = null;
+      currentAudioPlayer = null;
+      $('#arc').classList.remove('speaking');
+      $('#status-badge').textContent = 'SYSTEM NOMINAL // STANDBY';
+      $('#status-badge').style.color = 'var(--cyan)';
+      scheduleWakeRestart(350);
+      updateMicHUDIndicator(true);
+      return;
+    }
+
+    this.isPlaying = true;
+    const item = this.queue.shift();
+    const audio = new Audio("data:audio/mp3;base64," + item.b64Audio);
+    this.currentAudio = audio;
+    currentAudioPlayer = audio;
+
+    audio.onplay = () => {
+      safeStopSpeechRecognition();
+      $('#arc').classList.add('speaking');
+      $('#status-badge').textContent = 'NEURAL STREAMING VOICE ACTIVE';
+      $('#status-badge').style.color = 'var(--amber)';
+    };
+
+    audio.onended = () => {
+      this.playNext();
+    };
+
+    audio.onerror = (err) => {
+      console.warn("Audio chunk error:", err);
+      this.playNext();
+    };
+
+    audio.play().catch(e => {
+      console.warn("Autoplay check:", e);
+      this.playNext();
+    });
+  }
+}
+const audioStreamQueue = new AudioStreamQueue();
+
+const sharedTtsFreq = new Uint8Array(64);
+const sharedMicFreq = new Uint8Array(64);
 
 function appendDiagLog(text) {
   const d = document.createElement('div');
@@ -2683,31 +2829,40 @@ function playNeuralAudio(b64Audio) {
 function getLiveAudioEnergy() {
   // 1. If J.A.R.V.I.S. is speaking via Neural TTS
   if (currentAudioPlayer && !currentAudioPlayer.paused && ttsAnalyser) {
-    const freq = new Uint8Array(ttsAnalyser.frequencyBinCount);
-    ttsAnalyser.getByteFrequencyData(freq);
+    ttsAnalyser.getByteFrequencyData(sharedTtsFreq);
     let sum = 0;
-    for (let i = 0; i < freq.length; i++) sum += freq[i];
-    const avg = sum / (freq.length || 1);
+    for (let i = 0; i < sharedTtsFreq.length; i++) sum += sharedTtsFreq[i];
+    const avg = sum / (sharedTtsFreq.length || 1);
     return {
       active: true,
       mode: 'speaking',
       energy: Math.min(1.0, avg / 110),
-      frequencies: freq
+      frequencies: sharedTtsFreq
+    };
+  }
+
+  // 1b. If speaking via Web Speech Synthesis API
+  if (window.speechSynthesis && window.speechSynthesis.speaking) {
+    const t = Date.now() / 90;
+    return {
+      active: true,
+      mode: 'speaking',
+      energy: 0.55 + 0.35 * Math.sin(t),
+      frequencies: sharedTtsFreq
     };
   }
 
   // 2. If Sir is speaking into the microphone
   if (isRecording && analyser) {
-    const freq = new Uint8Array(analyser.frequencyBinCount);
-    analyser.getByteFrequencyData(freq);
+    analyser.getByteFrequencyData(sharedMicFreq);
     let sum = 0;
-    for (let i = 0; i < freq.length; i++) sum += freq[i];
-    const avg = sum / (freq.length || 1);
+    for (let i = 0; i < sharedMicFreq.length; i++) sum += sharedMicFreq[i];
+    const avg = sum / (sharedMicFreq.length || 1);
     return {
       active: true,
       mode: 'recording',
       energy: Math.min(1.0, avg / 90),
-      frequencies: freq
+      frequencies: sharedMicFreq
     };
   }
 
@@ -2728,6 +2883,9 @@ function getLiveAudioEnergy() {
     active: false,
     mode: 'idle',
     energy: 0.08 + 0.05 * Math.sin(t),
+    frequencies: null
+  };
+}
     frequencies: null
   };
 }
@@ -3147,15 +3305,31 @@ function handleWSMessage(e) {
   if (msg.type === 'say') {
     appendChat('jarvis', msg.text, msg.id);
     appendSuggestionChips();
-    if (msg.audio) {
+    if ($('#native-voice-toggle')?.checked) {
+      speakInstantNative(msg.text);
+    } else if (msg.audio) {
       playNeuralAudio(msg.audio);
     }
   } else if (msg.type === 'say_text') {
     appendChat('jarvis', msg.text, msg.id);
+    if ($('#native-voice-toggle')?.checked) {
+      speakInstantNative(msg.text);
+    }
   } else if (msg.type === 'say_audio') {
-    if (msg.audio) {
+    if (!$('#native-voice-toggle')?.checked && msg.audio) {
       playNeuralAudio(msg.audio);
     }
+  } else if (msg.type === 'say_stream_text') {
+    appendStreamChat('jarvis', msg.text, msg.id, msg.chunk_index);
+    if ($('#native-voice-toggle')?.checked) {
+      speakInstantNative(msg.text);
+    }
+  } else if (msg.type === 'say_stream_audio') {
+    if (!$('#native-voice-toggle')?.checked && msg.audio) {
+      audioStreamQueue.enqueue(msg.chunk_index, msg.audio, msg.id);
+    }
+  } else if (msg.type === 'say_stream_end') {
+    appendSuggestionChips();
   } else if (msg.type === 'antigravity_directive') {
     renderAntigravityDirective(msg.directive);
   } else if (msg.type === 'intel_media') {
@@ -3725,9 +3899,22 @@ function initArcReactor3D() {
 
   // Animation Loop with Audio Frequency Sync & Particle Wave
   let clock = new THREE.Clock();
+  let lastFrameTime = 0;
 
-  function animate() {
+  function animate(now = 0) {
     requestAnimationFrame(animate);
+
+    // 1. Skip rendering if tab is hidden in background to preserve system resources
+    if (document.hidden) return;
+
+    // 2. Adaptive Frame Throttling: 60 FPS when active, 30 FPS when idle standby
+    const isActive = isRecording || state === 'thinking' || isDragging || 
+                     (currentAudioPlayer && !currentAudioPlayer.paused) ||
+                     (window.speechSynthesis && window.speechSynthesis.speaking) ||
+                     pulseEnergyBoost > 0.05;
+    const minInterval = isActive ? 15 : 31;
+    if (now - lastFrameTime < minInterval) return;
+    lastFrameTime = now;
 
     const delta = clock.getDelta();
     const elapsedTime = clock.getElapsedTime();

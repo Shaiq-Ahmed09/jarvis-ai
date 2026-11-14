@@ -21,7 +21,16 @@ COMMON_PHRASES = [
     "Session cache cleared, Sir.",
     "Protocol suspended, Sir.",
     "One moment, Sir.",
-    "Executing that for you now, Sir."
+    "Executing that for you now, Sir.",
+    "Volume adjusted, Sir.",
+    "Audio mute toggled, Sir.",
+    "Optical camera online, Sir.",
+    "Optical camera deactivated, Sir.",
+    "Optical snapshot captured, Sir.",
+    "Desktop toggled, Sir.",
+    "Window state updated, Sir.",
+    "Media playback updated, Sir.",
+    "Application launched, Sir."
 ]
 
 async def synthesize_raw(text: str, voice: str = DEFAULT_VOICE) -> str:

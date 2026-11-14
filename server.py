@@ -8,6 +8,7 @@ import io
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -126,6 +127,8 @@ async def lifespan(app: FastAPI):
     sentinel_task.cancel()
 
 app = FastAPI(title="JARVIS Stark-Tech Full Control Interface", lifespan=lifespan)
+from fastapi.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 S, N, B = {"type": "string"}, {"type": "number"}, {"type": "boolean"}
 
@@ -376,10 +379,116 @@ def prune_history(history, keep=1):
                 m["content"] = "(previous screenshot frame purged to maximize speed)"
     return history
 
+def is_deterministic_fast_path(name: str, args: dict) -> bool:
+    """Return True if command should execute directly in <15ms without LLM overhead."""
+    if name in ["set_volume", "camera_control", "manage_window", "media_control"]:
+        return True
+    if name == "system_control" and args.get("action") in ["lock", "show_desktop"]:
+        return True
+    if name in ["open_app", "close_app"] and args.get("target") in [
+        "notepad", "calc", "spotify", "chrome", "edge", "brave", "terminal", "cmd", "powershell",
+        "task manager", "code", "whatsapp", "settings", "downloads", "documents", "camera"
+    ]:
+        return True
+    if name == "switch_tab":
+        return True
+    return False
+
+def get_fast_ack_phrase(name: str, args: dict) -> str:
+    """Return instant acknowledgment phrase from pre-warmed audio cache (0ms synthesis)."""
+    if name == "set_volume":
+        if args.get("action") == "mute":
+            return "Audio mute toggled, Sir."
+        return "Volume adjusted, Sir."
+    if name == "camera_control":
+        act = args.get("action", "start")
+        if act == "start":
+            return "Optical camera online, Sir."
+        elif act == "stop":
+            return "Optical camera deactivated, Sir."
+        return "Optical snapshot captured, Sir."
+    if name == "system_control" and args.get("action") == "lock":
+        return "Workstation locked, Sir."
+    if name == "manage_window":
+        if args.get("action") == "show_desktop":
+            return "Desktop toggled, Sir."
+        return "Window state updated, Sir."
+    if name == "media_control":
+        return "Media playback updated, Sir."
+    if name == "open_app":
+        return "Right away, Sir."
+    if name == "close_app":
+        return "I have handled that for you, Sir."
+    return "Right away, Sir."
+
 def extract_action_intent(text: str):
     """Detect unhandled actionable intents (camera feed, sentinel briefings, window focus, tab switch, antigravity directives, intel media, visual clicking, open tabs, search, Gmail, YouTube) if model omits tool call."""
     t = text.lower().strip()
     
+    # 0.0001 Instant Hardware, Volume & OS Controls
+    if t in ["mute", "unmute", "toggle mute", "mute volume", "mute audio", "silence audio", "silence"]:
+        return ("set_volume", {"action": "mute"})
+    if t in ["volume up", "increase volume", "louder", "turn up volume", "raise volume"]:
+        return ("set_volume", {"action": "up"})
+    if t in ["volume down", "decrease volume", "lower volume", "turn down volume", "softer"]:
+        return ("set_volume", {"action": "down"})
+    vol_match = re.match(r"^(?:set )?volume (?:to )?(\d{1,3})%?$", t)
+    if vol_match:
+        lvl = min(100, max(0, int(vol_match.group(1))))
+        return ("set_volume", {"action": "set", "level": lvl})
+
+    if any(t == k or t.startswith(k) for k in ["lock pc", "lock computer", "lock workstation", "lock screen", "lock machine"]):
+        return ("system_control", {"action": "lock"})
+
+    if t in ["maximize", "maximize window", "maximize screen"]:
+        return ("manage_window", {"action": "maximize"})
+    if t in ["minimize", "minimize window"]:
+        return ("manage_window", {"action": "minimize"})
+    if t in ["show desktop", "minimize all", "desktop"]:
+        return ("manage_window", {"action": "show_desktop"})
+    if t in ["snap left", "snap window left"]:
+        return ("manage_window", {"action": "snap_left"})
+    if t in ["snap right", "snap window right"]:
+        return ("manage_window", {"action": "snap_right"})
+
+    if t in ["play", "pause", "play pause", "pause music", "resume music", "play music"]:
+        return ("media_control", {"action": "play_pause"})
+    if t in ["next track", "next song", "skip song", "next"]:
+        return ("media_control", {"action": "next"})
+    if t in ["previous track", "previous song", "prev song", "back song"]:
+        return ("media_control", {"action": "previous"})
+    if t in ["stop music", "stop playback", "stop media"]:
+        return ("media_control", {"action": "stop"})
+
+    fast_apps = {
+        "notepad": "notepad",
+        "calculator": "calc",
+        "calc": "calc",
+        "spotify": "spotify",
+        "chrome": "chrome",
+        "google chrome": "chrome",
+        "edge": "edge",
+        "msedge": "edge",
+        "brave": "brave",
+        "brave browser": "brave",
+        "terminal": "terminal",
+        "cmd": "cmd",
+        "powershell": "powershell",
+        "task manager": "task manager",
+        "taskmgr": "task manager",
+        "vscode": "code",
+        "code": "code",
+        "whatsapp": "whatsapp",
+        "settings": "settings",
+        "downloads": "downloads",
+        "documents": "documents",
+    }
+    for app_k, app_t in fast_apps.items():
+        if t in [f"open {app_k}", f"launch {app_k}", f"start {app_k}"]:
+            return ("open_app", {"target": app_t})
+        if t in [f"close {app_k}", f"terminate {app_k}", f"kill {app_k}"]:
+            return ("close_app", {"target": app_t})
+
     # 0.001 Optical Sensory Camera Feed Intents
     cam_start_patterns = [
         "open camera", "turn on camera", "start camera", "enable camera", "show camera", "activate camera",
@@ -623,6 +732,14 @@ class JarvisSession:
                 await self.send(type="say_audio", id=msg_id, audio=audio_b64)
         except Exception as e:
             print(f"TTS synthesis error: {e}")
+
+    async def synthesize_and_stream_chunk(self, msg_id: str, chunk_index: int, text: str):
+        try:
+            audio_b64 = await get_or_synthesize_audio(text)
+            if audio_b64:
+                await self.send(type="say_stream_audio", id=msg_id, chunk_index=chunk_index, audio=audio_b64)
+        except Exception as e:
+            print(f"Stream chunk TTS error: {e}")
 
     async def request_approval(self, tool_name: str, args: dict):
         aid = str(time.time())
@@ -1286,6 +1403,22 @@ class JarvisSession:
         except Exception as e:
             print(f"Chat persistence error: {e}")
         self.history.append({"role": "user", "content": user_text})
+
+        # ⚡ 0ms Fast-Path Execution Bypass for routine deterministic commands
+        fast_action = extract_action_intent(user_text)
+        if fast_action:
+            fn_name, fn_args = fast_action
+            if is_deterministic_fast_path(fn_name, fn_args):
+                await self.send(type="log", text=f"⚡ 0ms Fast-Path Execution: {fn_name}({json.dumps(fn_args)})")
+                ack_phrase = get_fast_ack_phrase(fn_name, fn_args)
+                asyncio.create_task(self.send_vocal_response(ack_phrase))
+                try:
+                    res = await self.run_tool(fn_name, fn_args)
+                    await self.send(type="log", text=f"Fast-path completed: {res}")
+                except Exception as ex:
+                    print(f"Fast path error: {ex}")
+                return
+
         tools_executed = 0
         try:
             for _ in range(15):
@@ -1294,16 +1427,88 @@ class JarvisSession:
                 
                 choice = None
                 engine_name = "Gemini Cloud"
+                is_streamed = False
 
                 if not self.manual_offline_mode:
                     try:
                         clean_msgs = sanitize_messages_for_cloud(msgs)
-                        r = await client.chat.completions.create(model=MODEL, messages=clean_msgs, tools=TOOLS)
-                        choice = r.choices[0].message
+                        stream = await client.chat.completions.create(model=MODEL, messages=clean_msgs, tools=TOOLS, stream=True)
                         if self.in_failover:
                             self.in_failover = False
                             await self.send(type="core_mode", mode="cloud", label="NEURAL CORE // CLOUD (GEMINI)")
                             await self.send(type="log", text="⚡ Cloud Neural Link restored. All systems nominal.")
+                        
+                        msg_id = str(time.time())
+                        full_content = ""
+                        sentence_buffer = ""
+                        chunk_idx = 0
+                        tool_calls_dict = {}
+
+                        async for chunk in stream:
+                            if not chunk.choices:
+                                continue
+                            delta = chunk.choices[0].delta
+                            
+                            if delta.content:
+                                full_content += delta.content
+                                sentence_buffer += delta.content
+                                
+                                sentences = re.split(r'(?<=[.!?\n])\s+', sentence_buffer)
+                                if len(sentences) > 1:
+                                    for s in sentences[:-1]:
+                                        s_clean = s.strip()
+                                        if s_clean:
+                                            await self.send(type="say_stream_text", id=msg_id, chunk_index=chunk_idx, text=s_clean)
+                                            asyncio.create_task(self.synthesize_and_stream_chunk(msg_id, chunk_idx, s_clean))
+                                            chunk_idx += 1
+                                    sentence_buffer = sentences[-1]
+
+                            if delta.tool_calls:
+                                for tc in delta.tool_calls:
+                                    idx = tc.index if tc.index is not None else 0
+                                    if idx not in tool_calls_dict:
+                                        tool_calls_dict[idx] = {
+                                            "id": tc.id or f"call_{time.time()}_{idx}",
+                                            "function": {"name": "", "arguments": ""},
+                                            "type": "function"
+                                        }
+                                    if tc.id:
+                                        tool_calls_dict[idx]["id"] = tc.id
+                                    if tc.function:
+                                        if tc.function.name:
+                                            tool_calls_dict[idx]["function"]["name"] += tc.function.name
+                                        if tc.function.arguments:
+                                            tool_calls_dict[idx]["function"]["arguments"] += tc.function.arguments
+
+                        if sentence_buffer.strip():
+                            s_clean = sentence_buffer.strip()
+                            await self.send(type="say_stream_text", id=msg_id, chunk_index=chunk_idx, text=s_clean)
+                            asyncio.create_task(self.synthesize_and_stream_chunk(msg_id, chunk_idx, s_clean))
+                            chunk_idx += 1
+
+                        if chunk_idx > 0:
+                            await self.send(type="say_stream_end", id=msg_id, total_chunks=chunk_idx)
+                            try:
+                                save_chat_message("jarvis", full_content)
+                            except Exception as e:
+                                print(f"Chat persistence error: {e}")
+
+                        tool_calls_list = [v for k, v in sorted(tool_calls_dict.items())] if tool_calls_dict else None
+                        
+                        class StreamChoice:
+                            def __init__(self, content, tool_calls):
+                                self.content = content
+                                self.tool_calls = tool_calls
+                            def model_dump(self, exclude_none=True):
+                                d = {"role": "assistant"}
+                                if self.content is not None:
+                                    d["content"] = self.content
+                                if self.tool_calls:
+                                    d["tool_calls"] = self.tool_calls
+                                return d
+
+                        choice = StreamChoice(full_content or None, tool_calls_list)
+                        is_streamed = True
                     except Exception as cloud_err:
                         print(f"Cloud neural core fault ({cloud_err}). Initiating local Ollama failover...")
                         self.in_failover = True
@@ -1320,8 +1525,8 @@ class JarvisSession:
 
                 self.history.append(choice.model_dump(exclude_none=True))
 
-                # Optimized vocal dispatch: concurrent on tool turns, awaited on final turn
-                if choice.content and choice.content.strip():
+                # Vocal dispatch for non-streamed choices
+                if not is_streamed and choice.content and choice.content.strip():
                     if choice.tool_calls:
                         asyncio.create_task(self.send_vocal_response(choice.content))
                     else:
@@ -1337,8 +1542,7 @@ class JarvisSession:
                     except Exception as ex:
                         print(f"Vector memory extraction error: {ex}")
 
-                    # Automatic execution fallback guarantee:
-                    # If Sir asked to open a tab/search and the LLM merely replied in dialogue, trigger the browser tab immediately!
+                    # Automatic execution fallback guarantee
                     if tools_executed == 0:
                         fallback_intent = extract_action_intent(user_text)
                         if fallback_intent:
@@ -1351,9 +1555,11 @@ class JarvisSession:
                     return
 
                 tool_results, images = [], []
-                for call in choice.tool_calls:
-                    fn_name = call.function.name
-                    args = json.loads(call.function.arguments or "{}")
+                for call in (choice.tool_calls or []):
+                    fn_name = call["function"]["name"] if isinstance(call, dict) else call.function.name
+                    fn_args_raw = call["function"]["arguments"] if isinstance(call, dict) else (call.function.arguments or "{}")
+                    call_id = call["id"] if isinstance(call, dict) else call.id
+                    args = json.loads(fn_args_raw or "{}")
                     tools_executed += 1
 
                     # Ask approval ONLY for destructive commands
@@ -1380,7 +1586,7 @@ class JarvisSession:
 
                     tool_results.append({
                         "role": "tool",
-                        "tool_call_id": call.id,
+                        "tool_call_id": call_id,
                         "content": str(out)
                     })
 
