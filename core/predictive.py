@@ -35,8 +35,9 @@ class PredictiveEngine:
                 "title": "DEEP COGNITIVE FOCUS",
                 "icon": "🛡️",
                 "category": "WORKSTATION",
-                "description": "Silence background distractions, mute master audio, and minimize non-essential windows.",
+                "description": "Engage study focus mode, block all gaming software, mute audio, and silence distractions.",
                 "actions": [
+                    {"tool": "toggle_focus_mode", "args": {"enabled": True, "objective": "Deep Cognitive Focus & Study", "duration_minutes": 30}},
                     {"tool": "set_volume", "args": {"action": "mute"}},
                     {"tool": "manage_window", "args": {"action": "minimize"}}
                 ]

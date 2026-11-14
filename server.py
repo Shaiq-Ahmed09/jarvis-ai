@@ -82,6 +82,7 @@ from core.quantum_p2p import get_quantum_p2p_mesh
 from core.self_patcher import get_code_self_patcher
 from core.voice_clone import get_voice_biometrics
 from core.audio_cache import clear_audio_cache
+from core.focus_mode import get_focus_guardian
 
 # Active WebSocket session registry for proactive broadcasting
 ACTIVE_SESSIONS = set()
@@ -273,6 +274,12 @@ TOOLS = [
           "rate": {"type": "string", "description": "Speed rate offset, e.g. '+12%', '+16%'."},
           "volume": {"type": "string", "description": "Volume offset, e.g. '+0%', '+5%'."}},
          ["action"]),
+    tool("toggle_focus_mode", "Engage or disengage Study / Deep Work Focus Mode: locks in on a specific study or work objective and actively monitors the workstation to block, minimize, or close games, gaming platforms (Steam, Riot, Epic Games, Roblox, Minecraft, Valorant, etc.), and distracting applications.",
+         {"enabled": {"type": "boolean", "description": "True to activate focus mode, False to disengage."},
+          "objective": {"type": "string", "description": "Specific focus objective (e.g. 'Calculus Exam Preparation', 'Quantum Physics Study', 'Core Architectural Sprint')."},
+          "duration_minutes": {"type": "integer", "description": "Session duration in minutes (e.g. 25, 45, 60, 90). Omit for open-ended focus."}},
+         ["enabled"]),
+    tool("get_focus_mode_status", "Retrieve real-time telemetry of the Study Focus Mode envelope, including remaining session time, active objective, and number of deflected game launch attempts."),
 ]
 
 def get_telemetry():
@@ -404,6 +411,10 @@ COMMUNICATION & APP INTEGRATIONS:
 - VOICE CLONE BIOMETRIC SYNTHESIS:
   * You feature biometric vocal identity profiling ('core/voice_clone.py').
   * Use 'voice_biometric_action' ('list_profiles', 'set_profile', 'audition', 'tune_parameters', 'get_active') to switch voice persona ('jarvis_prime', 'sir_clone', 'friday_aux', 'sentinel_overwatch') and tune vocal acoustic parameters.
+- STUDY & DEEP WORK FOCUS MODE:
+  * You possess an active Focus Mode guardian ('core/focus_mode.py') to lock in on study, exams, or deep work.
+  * When Focus Mode is engaged, you actively monitor the desktop to block, minimize, or close games (Steam, Riot, Epic Games, Valorant, Roblox, Minecraft, etc.) and deflect distracting entertainment apps.
+  * Use 'toggle_focus_mode(enabled=True, objective="...", duration_minutes=...)' to activate or deactivate, and 'get_focus_mode_status' to check telemetry.
 - ANTIGRAVITY EVOLUTION DIRECTIVES:
   * When Sir asks to improve the project, generate prompts/commands for Antigravity, or evolve J.A.R.V.I.S., call 'generate_antigravity_prompt'.
   * Explain the architectural benefits of each enhancement in your response, highlighting that 1-click Antigravity prompt cards have been generated in his HUD.
@@ -444,10 +455,16 @@ def is_deterministic_fast_path(name: str, args: dict) -> bool:
         return True
     if name == "switch_tab":
         return True
+    if name == "toggle_focus_mode":
+        return True
     return False
 
 def get_fast_ack_phrase(name: str, args: dict) -> str:
     """Return instant acknowledgment phrase from pre-warmed audio cache (0ms synthesis)."""
+    if name == "toggle_focus_mode":
+        if args.get("enabled", True):
+            return "Focus mode engaged, Sir. All gaming and entertainment distractions are now blocked."
+        return "Focus mode disengaged, Sir. Entertainment access restored."
     if name == "set_volume":
         if args.get("action") == "mute":
             return "Audio mute toggled, Sir."
@@ -491,6 +508,12 @@ def extract_action_intent(text: str):
 
     if any(t == k or t.startswith(k) for k in ["lock pc", "lock computer", "lock workstation", "lock screen", "lock machine"]):
         return ("system_control", {"action": "lock"})
+
+    # Study & Deep Work Focus Mode Intent
+    if any(k in t for k in ["start focus mode", "activate focus mode", "study mode", "lock in for study", "lock in", "enable focus mode", "start study mode", "focus on study", "engage focus"]):
+        return ("toggle_focus_mode", {"enabled": True, "objective": "Study & Deep Work", "duration_minutes": 30})
+    if any(k in t for k in ["stop focus mode", "exit focus mode", "disable focus mode", "turn off focus mode", "end focus mode", "leave focus mode", "cancel focus mode"]):
+        return ("toggle_focus_mode", {"enabled": False})
 
     if t in ["maximize", "maximize window", "maximize screen"]:
         return ("manage_window", {"action": "maximize"})
@@ -1590,6 +1613,26 @@ class JarvisSession:
                 active = vb.get_active_profile()
                 return f"Active vocal profile: '{active['name']}' ({active['neural_voice']}, pitch={active['pitch']}, rate={active['rate']})."
 
+        if name == "toggle_focus_mode":
+            guardian = get_focus_guardian()
+            enabled = bool(args.get("enabled", True))
+            if enabled:
+                obj = args.get("objective", "Study & Deep Work")
+                dur = args.get("duration_minutes", 30)
+                status = guardian.activate(objective=obj, duration_minutes=dur)
+                await self.send(type="focus_mode_status", **status)
+                return f"Focus Mode activated for '{obj}' ({status['remaining_formatted']} remaining). All gaming platforms and entertainment launchers will be actively deflected."
+            else:
+                status = guardian.deactivate()
+                await self.send(type="focus_mode_status", **status)
+                return "Focus Mode disengaged, Sir. Workstation entertainment and gaming access restored."
+
+        if name == "get_focus_mode_status":
+            guardian = get_focus_guardian()
+            status = guardian.get_status()
+            await self.send(type="focus_mode_status", **status)
+            return f"Focus Mode status: {'ACTIVE' if status['is_active'] else 'STANDBY'}, objective '{status['objective']}', {status['remaining_formatted']} remaining, {status['blocked_attempts']} distractions deflected."
+
         return "Unknown command requested."
 
     async def turn(self, user_text: str):
@@ -1860,6 +1903,15 @@ async def websocket_handler(ws: WebSocket):
                     await session.send(type="biometric_telemetry", metrics=get_biometric_sensor().get_latest_telemetry())
                     await session.send(type="predictive_workflows", list=get_predictive_engine().predict_workflows())
                     await session.send(type="ar_window_matrix", **get_holographic_window_matrix())
+                    
+                    guardian = get_focus_guardian()
+                    if guardian.is_active:
+                        blocked = guardian.check_and_enforce()
+                        if blocked:
+                            for blk in blocked:
+                                app_name = blk.get("title") or blk.get("name") or "Gaming Application"
+                                await session.send_vocal_response(f"Focus mode is currently active for your {guardian.objective}, Sir. I have closed {app_name}. Stay on target.")
+                    await session.send(type="focus_mode_status", **guardian.get_status())
                 except Exception:
                     pass
                 await asyncio.sleep(2.5)
@@ -1878,6 +1930,7 @@ async def websocket_handler(ws: WebSocket):
     await session.send(type="code_diagnostics", **get_code_self_patcher().run_code_diagnostics())
     vb = get_voice_biometrics()
     await session.send(type="voice_profiles_data", profiles=vb.list_profiles(), active_id=vb.active_profile_id)
+    await session.send(type="focus_mode_status", **get_focus_guardian().get_status())
     
     # Restore persistent chat history across page refresh from SQLite cortex
     try:
@@ -1958,7 +2011,7 @@ async def websocket_handler(ws: WebSocket):
                 await session.send(type="predictive_workflows", list=get_predictive_engine().predict_workflows())
 
             elif msg_type == "execute_predicted_workflow":
-                wid = data.get("id")
+                wid = data.get("id") or data.get("workflow_id")
                 session.current_task = asyncio.create_task(session.run_tool("execute_predicted_macro", {"workflow_id": wid}))
 
             elif msg_type == "dispatch_swarm":
@@ -2007,6 +2060,22 @@ async def websocket_handler(ws: WebSocket):
                 vb = get_voice_biometrics()
                 clip = await vb.synthesize_audition_clip(pid)
                 await session.send(type="voice_audition_clip", profile_id=pid, audio=clip["audio_base64"], phrase=clip["phrase"])
+
+            elif msg_type == "toggle_focus_mode":
+                guardian = get_focus_guardian()
+                enabled = bool(data.get("enabled", True))
+                if enabled:
+                    obj = data.get("objective", "Study & Deep Work")
+                    dur = data.get("duration_minutes", 30)
+                    st = guardian.activate(objective=obj, duration_minutes=dur)
+                    await session.send_vocal_response(f"Focus mode engaged for {obj}, Sir. All gaming software is now blocked.")
+                else:
+                    st = guardian.deactivate()
+                    await session.send_vocal_response("Focus mode disengaged, Sir. Entertainment access restored.")
+                await session.send(type="focus_mode_status", **st)
+
+            elif msg_type == "get_focus_mode":
+                await session.send(type="focus_mode_status", **get_focus_guardian().get_status())
 
             elif msg_type == "approve":
                 aid = data.get("id")

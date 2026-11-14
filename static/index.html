@@ -1372,8 +1372,8 @@ body {
   padding-top: 4px;
 }
 
-/* Quantum P2P, Self-Patch, & Voice Studio Drawers */
-#p2p-drawer, #self-patch-drawer, #voice-studio-drawer {
+/* Quantum P2P, Self-Patch, Voice Studio, & Focus Mode Drawers */
+#p2p-drawer, #self-patch-drawer, #voice-studio-drawer, #focus-drawer {
   position: fixed;
   top: 0;
   right: -560px;
@@ -1388,7 +1388,28 @@ body {
   display: flex;
   flex-direction: column;
 }
-#p2p-drawer.open, #self-patch-drawer.open, #voice-studio-drawer.open { right: 0; }
+#p2p-drawer.open, #self-patch-drawer.open, #voice-studio-drawer.open, #focus-drawer.open { right: 0; }
+
+/* Focus Mode Floating HUD Banner */
+#focus-active-banner {
+  display: none;
+  background: linear-gradient(90deg, rgba(255, 62, 62, 0.16) 0%, rgba(0, 240, 255, 0.12) 100%);
+  border: 1px solid rgba(255, 62, 62, 0.45);
+  border-radius: 4px;
+  padding: 8px 14px;
+  margin: 6px 12px 6px 12px;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 0 16px rgba(255, 62, 62, 0.2);
+  animation: focusPulse 3s infinite ease-in-out;
+}
+#focus-active-banner.active {
+  display: flex;
+}
+@keyframes focusPulse {
+  0%, 100% { border-color: rgba(255, 62, 62, 0.45); box-shadow: 0 0 12px rgba(255, 62, 62, 0.15); }
+  50% { border-color: rgba(0, 240, 255, 0.6); box-shadow: 0 0 20px rgba(0, 240, 255, 0.25); }
+}
 
 .drawer-body-scroll {
   flex: 1;
@@ -1714,6 +1735,7 @@ body {
   <div class="hud-header">
     <span>J.A.R.V.I.S. // FULL HANDS-ON PC INTERFACE</span>
     <div style="display: flex; align-items: center; gap: 6px;">
+      <button class="stark-btn mini" id="focus-hud-btn" onclick="openFocusDrawer()" title="Engage Study & Deep Work Focus Protocol (Game Deflector)">🔒 FOCUS</button>
       <button class="stark-btn mini" onclick="openP2PDrawer()" title="Quantum-Grade Encrypted P2P Communications Mesh">🔐 P2P</button>
       <button class="stark-btn mini" onclick="openSelfPatchDrawer()" title="Autonomous Code Self-Patching Runtime">🧬 PATCH</button>
       <button class="stark-btn mini" onclick="openVoiceStudioDrawer()" title="Biometric Voice Clone & Vocal Studio">🎙️ VOICE</button>
@@ -1747,6 +1769,22 @@ body {
         <span>👁️ OPTICAL SCAN</span>
         <span class="predictive-conf">88%</span>
       </div>
+    </div>
+  </div>
+
+  <!-- Active Focus Mode Floating HUD Banner -->
+  <div id="focus-active-banner">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <div style="width: 8px; height: 8px; border-radius: 50%; background: var(--crimson); box-shadow: 0 0 8px var(--crimson); animation: pulse 1.2s infinite;"></div>
+      <div style="font-family: var(--font-hud); font-size: 11px; letter-spacing: 0.5px;">
+        <span style="color: var(--crimson); font-weight: bold;">[STUDY LOCK-IN]</span>
+        <span id="focus-banner-objective" style="color: var(--txt); margin-left: 6px;">Physics & Mathematics</span>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <div style="font-family: var(--font-mono); font-size: 13px; font-weight: bold; color: var(--cyan);" id="focus-banner-timer">24:59</div>
+      <div style="font-size: 10px; font-family: var(--font-mono); color: var(--amber);" id="focus-banner-deflections">🛡️ 0 BLOCKED</div>
+      <button class="stark-btn mini" onclick="endFocusMode()" style="background: rgba(255, 62, 62, 0.25); border-color: var(--crimson); color: #fff; font-size: 10px; padding: 2px 8px;">DISENGAGE</button>
     </div>
   </div>
 
@@ -2140,6 +2178,96 @@ body {
       </div>
       <div id="voice-audition-status" style="font-size: 10px; font-family: var(--font-mono); color: var(--cyan); line-height: 1.4;">
         Standing by for vocal biometric audition signal...
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Study & Deep Focus Mode Protocol Drawer -->
+<div id="focus-drawer">
+  <div class="ar-header">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span style="color: var(--cyan); font-weight: bold;">🔒 STUDY & DEEP FOCUS PROTOCOL</span>
+      <span class="cortex-badge" id="focus-drawer-status-badge" style="background: rgba(0, 240, 255, 0.2); color: var(--cyan);">STANDBY</span>
+    </div>
+    <button class="drawer-close" onclick="closeFocusDrawer()" title="Close Focus Drawer">&times;</button>
+  </div>
+  <div class="drawer-body-scroll">
+    <!-- Active Focus Status & Countdown -->
+    <div class="stark-card" style="border-color: rgba(0, 240, 255, 0.3);">
+      <div class="stark-card-header">
+        <span>CURRENT FOCUS STATE & TELEMETRY</span>
+        <span class="cortex-badge" id="focus-active-tag" style="color: var(--dim); font-size: 9px;">INACTIVE</span>
+      </div>
+      <div style="font-size: 11px; color: var(--dim); line-height: 1.4;">
+        <div>OBJECTIVE: <strong id="focus-drawer-objective" style="color: var(--cyan);">None Set</strong></div>
+        <div style="display: flex; align-items: baseline; gap: 12px; margin: 8px 0 4px 0;">
+          <span style="font-family: var(--font-mono); font-size: 26px; font-weight: bold; color: var(--cyan); text-shadow: 0 0 10px rgba(0,240,255,0.4);" id="focus-drawer-timer">00:00</span>
+          <span style="font-size: 11px; color: var(--amber);" id="focus-drawer-deflected-summary">0 Games Deflected</span>
+        </div>
+        <div class="bar-track" style="height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; margin-bottom: 8px;">
+          <div class="bar-fill" id="focus-progress-fill" style="width: 0%; background: linear-gradient(90deg, var(--cyan), var(--emerald)); transition: width 0.5s ease;"></div>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 10px;">
+          <button class="stark-btn mini" id="focus-disengage-btn" onclick="endFocusMode()" style="display: none; background: rgba(255, 62, 62, 0.2); border-color: var(--crimson); color: #ff6b6b;">DISENGAGE FOCUS MODE</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 1-Click Study & Productivity Presets -->
+    <div class="stark-card">
+      <div class="stark-card-header">
+        <span>⚡ 1-CLICK STUDY & FOCUS PRESETS</span>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px;">
+        <div class="stark-card" style="padding: 8px; cursor: pointer; border: 1px solid rgba(0, 240, 255, 0.2); background: rgba(0, 240, 255, 0.03);" onclick="quickLaunchFocus('Pomodoro Study Session', 25)">
+          <div style="color: var(--cyan); font-weight: bold; font-size: 11px;">⏱️ 25M POMODORO</div>
+          <div style="font-size: 9px; color: var(--dim); margin-top: 2px;">Core 25-minute academic sprint with distraction shield.</div>
+        </div>
+        <div class="stark-card" style="padding: 8px; cursor: pointer; border: 1px solid rgba(0, 240, 255, 0.2); background: rgba(0, 240, 255, 0.03);" onclick="quickLaunchFocus('Deep Architectural Design', 45)">
+          <div style="color: var(--cyan); font-weight: bold; font-size: 11px;">📐 45M DEEP WORK</div>
+          <div style="font-size: 9px; color: var(--dim); margin-top: 2px;">Extended engineering & design immersion.</div>
+        </div>
+        <div class="stark-card" style="padding: 8px; cursor: pointer; border: 1px solid rgba(0, 240, 255, 0.2); background: rgba(0, 240, 255, 0.03);" onclick="quickLaunchFocus('Exam Prep & Mastery', 60)">
+          <div style="color: var(--cyan); font-weight: bold; font-size: 11px;">📚 60M EXAM PREP</div>
+          <div style="font-size: 9px; color: var(--dim); margin-top: 2px;">Comprehensive 1-hour locked distraction-free study.</div>
+        </div>
+        <div class="stark-card" style="padding: 8px; cursor: pointer; border: 1px solid rgba(0, 240, 255, 0.2); background: rgba(0, 240, 255, 0.03);" onclick="quickLaunchFocus('Open-Ended Study Session', 0)">
+          <div style="color: var(--cyan); font-weight: bold; font-size: 11px;">♾️ OPEN-ENDED</div>
+          <div style="font-size: 9px; color: var(--dim); margin-top: 2px;">Continuous study mode until you manually disengage.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Custom Focus Objective Launcher -->
+    <div class="stark-card">
+      <div class="stark-card-header">
+        <span>CUSTOM FOCUS DIRECTIVE</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
+        <div>
+          <label style="font-size: 9px; font-family: var(--font-hud); color: var(--dim); display: block; margin-bottom: 3px;">STUDY / WORK OBJECTIVE</label>
+          <input type="text" id="focus-custom-obj" class="hud-input" placeholder="e.g. Organic Chemistry Review, LeetCode Practice..." style="width: 100%; box-sizing: border-box; font-size: 11px; padding: 6px 8px;">
+        </div>
+        <div>
+          <label style="font-size: 9px; font-family: var(--font-hud); color: var(--dim); display: block; margin-bottom: 3px;">DURATION (MINUTES, 0 FOR INFINITE)</label>
+          <input type="number" id="focus-custom-dur" class="hud-input" value="30" min="0" max="480" style="width: 100%; box-sizing: border-box; font-size: 11px; padding: 6px 8px;">
+        </div>
+        <button class="stark-btn" onclick="launchCustomFocus()" style="margin-top: 4px; padding: 6px 12px; font-size: 11px; background: rgba(0, 240, 255, 0.15);">🛡️ ENGAGE STUDY LOCK-IN</button>
+      </div>
+    </div>
+
+    <!-- Distraction Shield Deflection Log -->
+    <div class="stark-card">
+      <div class="stark-card-header">
+        <span>GAMING DEFLECTION SHIELD LOG</span>
+        <span class="cortex-badge" id="focus-shield-badge" style="color: var(--emerald); font-size: 9px;">ACTIVE DEFENDER</span>
+      </div>
+      <div style="font-size: 10px; color: var(--dim); margin-bottom: 6px;">
+        Monitored launchers & processes: Steam, Epic Games, Riot, Valorant, Minecraft, Roblox, CS2, Genshin, League of Legends, Battlenet, Ubisoft.
+      </div>
+      <div id="focus-deflection-log" style="font-family: var(--font-mono); font-size: 10px; color: var(--txt); max-height: 160px; overflow-y: auto; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08); padding: 8px; border-radius: 3px;">
+        <div style="color: var(--dim); font-style: italic;">No gaming launch attempts recorded during this session. Workstation discipline intact.</div>
       </div>
     </div>
   </div>
@@ -4007,6 +4135,8 @@ function handleWSMessage(e) {
     renderVoiceProfiles(msg.profiles, msg.active_id);
   } else if (msg.type === 'voice_audition_clip') {
     handleVoiceAuditionClip(msg);
+  } else if (msg.type === 'focus_mode_status') {
+    renderFocusStatus(msg);
   } else if (msg.type === 'core_mode') {
     const isOffline = (msg.mode === 'offline');
     const toggle = $('#offline-toggle');
@@ -5564,6 +5694,141 @@ function handleVoiceAuditionClip(msg) {
   if (msg.audio) {
     playNeuralAudio(msg.audio);
     appendDiagLog(`Playing biometric voice audition for profile '${msg.profile_id}'`);
+  }
+}
+
+// ---------------------------------------------------------------------
+// STUDY & DEEP FOCUS PROTOCOL GUARDIAN
+// ---------------------------------------------------------------------
+function openFocusDrawer() {
+  playSound('click');
+  const d = document.getElementById('focus-drawer');
+  if (d) {
+    d.classList.add('open');
+    sendWS({ type: 'get_focus_mode' });
+  }
+}
+
+function closeFocusDrawer() {
+  const d = document.getElementById('focus-drawer');
+  if (d) d.classList.remove('open');
+}
+
+function toggleFocusMode(enabled, obj, dur) {
+  sendWS({
+    type: 'toggle_focus_mode',
+    enabled: !!enabled,
+    objective: obj || 'Study & Deep Work',
+    duration_minutes: (dur !== undefined && dur !== null) ? Number(dur) : 30
+  });
+}
+
+function quickLaunchFocus(obj, dur) {
+  playSound('chime');
+  toggleFocusMode(true, obj, dur);
+  appendDiagLog(`🔒 Focus Mode Lock-in: ${obj} (${dur > 0 ? dur + ' min' : 'Unlimited'})`);
+}
+
+function launchCustomFocus() {
+  const objInput = document.getElementById('focus-custom-obj');
+  const durInput = document.getElementById('focus-custom-dur');
+  const obj = (objInput && objInput.value.trim()) ? objInput.value.trim() : 'Academic Study Session';
+  const dur = (durInput && durInput.value) ? parseInt(durInput.value, 10) : 30;
+  quickLaunchFocus(obj, dur);
+  if (objInput) objInput.value = '';
+}
+
+function endFocusMode() {
+  playSound('beep');
+  toggleFocusMode(false);
+  appendDiagLog("Disengaged study focus protocol. Game launcher restrictions lifted.");
+}
+
+function renderFocusStatus(data) {
+  if (!data) return;
+  const isActive = !!data.is_active;
+
+  // Floating HUD Banner
+  const banner = document.getElementById('focus-active-banner');
+  const bannerObj = document.getElementById('focus-banner-objective');
+  const bannerTimer = document.getElementById('focus-banner-timer');
+  const bannerDefl = document.getElementById('focus-banner-deflections');
+  if (banner) {
+    if (isActive) {
+      banner.classList.add('active');
+    } else {
+      banner.classList.remove('active');
+    }
+  }
+  if (bannerObj) bannerObj.textContent = data.objective || 'Study & Deep Work';
+  if (bannerTimer) bannerTimer.textContent = data.remaining_formatted || '00:00';
+  if (bannerDefl) bannerDefl.textContent = `🛡️ ${data.blocked_attempts || 0} BLOCKED`;
+
+  // HUD Header Button
+  const hudBtn = document.getElementById('focus-hud-btn');
+  if (hudBtn) {
+    if (isActive) {
+      hudBtn.textContent = '🔒 FOCUS: ACTIVE';
+      hudBtn.style.borderColor = 'var(--crimson)';
+      hudBtn.style.color = '#ff6b6b';
+      hudBtn.style.boxShadow = '0 0 8px rgba(255, 62, 62, 0.4)';
+    } else {
+      hudBtn.textContent = '🔒 FOCUS';
+      hudBtn.style.borderColor = '';
+      hudBtn.style.color = '';
+      hudBtn.style.boxShadow = '';
+    }
+  }
+
+  // Drawer Elements
+  const statusBadge = document.getElementById('focus-drawer-status-badge');
+  const activeTag = document.getElementById('focus-active-tag');
+  const drawerObj = document.getElementById('focus-drawer-objective');
+  const drawerTimer = document.getElementById('focus-drawer-timer');
+  const drawerDeflSum = document.getElementById('focus-drawer-deflected-summary');
+  const disengageBtn = document.getElementById('focus-disengage-btn');
+  const progressFill = document.getElementById('focus-progress-fill');
+  const logContainer = document.getElementById('focus-deflection-log');
+
+  if (statusBadge) {
+    statusBadge.textContent = isActive ? 'ACTIVE // SHIELD ON' : 'STANDBY';
+    statusBadge.style.color = isActive ? 'var(--crimson)' : 'var(--cyan)';
+  }
+  if (activeTag) {
+    activeTag.textContent = isActive ? 'LOCKED IN' : 'INACTIVE';
+    activeTag.style.color = isActive ? 'var(--emerald)' : 'var(--dim)';
+  }
+  if (drawerObj) drawerObj.textContent = data.objective || 'None Set';
+  if (drawerTimer) drawerTimer.textContent = data.remaining_formatted || '00:00';
+  if (drawerDeflSum) drawerDeflSum.textContent = `${data.blocked_attempts || 0} Games Deflected`;
+  if (disengageBtn) disengageBtn.style.display = isActive ? 'block' : 'none';
+
+  // Progress Bar
+  if (progressFill) {
+    if (!isActive) {
+      progressFill.style.width = '0%';
+    } else if (data.remaining_seconds === 0 && data.elapsed_seconds > 0) {
+      progressFill.style.width = '100%';
+    } else {
+      const total = (data.elapsed_seconds || 0) + (data.remaining_seconds || 0);
+      const pct = total > 0 ? Math.min(100, Math.round(((data.elapsed_seconds || 0) / total) * 100)) : 100;
+      progressFill.style.width = `${pct}%`;
+    }
+  }
+
+  // Deflection Log
+  if (logContainer) {
+    const logs = data.blocked_log || [];
+    if (logs.length === 0) {
+      logContainer.innerHTML = '<div style="color: var(--dim); font-style: italic;">No gaming launch attempts recorded during this session. Workstation discipline intact.</div>';
+    } else {
+      logContainer.innerHTML = logs.map(entry => `
+        <div style="display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.05); color: #ff8585;">
+          <span>🛑 [${escapeHtml(entry.timestamp || '')}] ${escapeHtml(entry.app || '')}</span>
+          <span style="color: var(--crimson); font-size: 9px;">${escapeHtml(entry.action || 'BLOCKED')}</span>
+        </div>
+      `).join('');
+    }
   }
 }
 
