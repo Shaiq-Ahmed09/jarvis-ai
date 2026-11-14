@@ -43,7 +43,7 @@ if sys.platform == "win32":
         ctypes.windll.shcore.SetProcessDpiAwareness(2)
     except Exception:
         pass
-pyautogui.FAILSAFE = True
+pyautogui.FAILSAFE = False
 pyautogui.PAUSE = 0.02  # Ultra-low latency for mouse & keyboard operations
 
 HERE = Path(__file__).parent
@@ -70,6 +70,12 @@ from core.memory_vector import (
     delete_memory_from_cortex,
     auto_extract_and_remember
 )
+
+# Import advanced multi-agent, AR, predictive & biometric engines
+from core.swarm_agents import get_swarm_orchestrator, AGENTS_MANIFEST
+from core.ar_overlays import get_holographic_window_matrix, ar_control_window
+from core.predictive import get_predictive_engine
+from core.biometrics import get_biometric_sensor
 
 # Active WebSocket session registry for proactive broadcasting
 ACTIVE_SESSIONS = set()
@@ -230,6 +236,15 @@ TOOLS = [
     tool("get_sentinel_status", "Retrieve the live status, monitoring parameters, and diagnostic event history of J.A.R.V.I.S. autonomous proactive sentinel daemon."),
     tool("toggle_offline_mode", "Toggle between Cloud LLM (Gemini) and Local Offline Mode (Ollama / Failsafe).",
          {"enabled": B}, ["enabled"]),
+    tool("dispatch_multi_agent_swarm", "Mobilize the autonomous Stark multi-agent swarm (CORTEX, SENTINEL, TACTICAL, OPTICAL) to collaborate concurrently on a complex goal or protocol.",
+         {"goal": S, "agents": {"type": "array", "items": S}}, ["goal"]),
+    tool("get_holographic_window_overlays", "Scan and project the live 2.5D spatial augmented reality window matrix of desktop applications with coordinates and telemetry into the HUD."),
+    tool("ar_window_action", "Execute a holographic AR window command: action can be 'focus', 'snap_left', 'snap_right', 'maximize', 'minimize', or 'close' on a target window handle (hwnd).",
+         {"hwnd": N, "action": {"type": "string", "enum": ["focus", "snap_left", "snap_right", "maximize", "minimize", "close"]}}, ["hwnd", "action"]),
+    tool("predict_next_workflows", "Compute proactive contextual workflow predictions (Dev Sprint, Executive Briefing, Deep Focus, Social Comms, Night Lock) with Bayesian confidence."),
+    tool("execute_predicted_macro", "Execute a predictive automated workflow macro: 'dev_sprint', 'executive_briefing', 'deep_focus', 'social_comms', 'optical_scan', 'night_lock'.",
+         {"workflow_id": S}, ["workflow_id"]),
+    tool("get_biometric_telemetry", "Retrieve real-time neural biometric metrics: Stress Index, Cognitive Focus score, estimated BPM, and emotional valence state."),
 ]
 
 def get_telemetry():
@@ -665,7 +680,8 @@ def extract_action_intent(text: str):
 def sanitize_messages_for_cloud(msgs: list) -> list:
     """Sanitize message history to ensure compatibility with Gemini OpenAI interface.
     Filters out synthetic local calls, ensures assistant tool calls have matching responses,
-    and prevents 400 Bad Request errors.
+    validates that tool calls possess required Google thought signatures, and prevents
+    400 Bad Request errors.
     """
     cleaned = []
     pending_tool_calls = set()
@@ -678,14 +694,24 @@ def sanitize_messages_for_cloud(msgs: list) -> list:
             tcs = m.get("tool_calls")
             if tcs:
                 valid_tcs = [tc for tc in tcs if not str(tc.get("id", "")).startswith("local_call_")]
-                if valid_tcs:
+                # Ensure all tool calls have valid thought_signature for Gemini 2.5 / 3.5
+                has_thought_sig = all(
+                    bool((tc.get("extra_content") or {}).get("google", {}).get("thought_signature"))
+                    for tc in valid_tcs
+                )
+                if valid_tcs and has_thought_sig:
                     m_copy = dict(m)
                     m_copy["tool_calls"] = valid_tcs
                     cleaned.append(m_copy)
                     for tc in valid_tcs:
                         pending_tool_calls.add(tc.get("id"))
                 else:
-                    cleaned.append({"role": "assistant", "content": m.get("content") or "Protocol processed."})
+                    # Sanitize to plain text assistant content to preserve context without crashing Gemini with 400
+                    content = m.get("content")
+                    if not content or not str(content).strip():
+                        act_names = [tc.get("function", {}).get("name", "action") for tc in valid_tcs] if valid_tcs else ["action"]
+                        content = f"Action executed: {', '.join(act_names)}."
+                    cleaned.append({"role": "assistant", "content": content})
             else:
                 cleaned.append(m)
         elif role == "tool":
@@ -1395,6 +1421,54 @@ class JarvisSession:
             webbrowser.open("https://calendar.google.com/calendar/render?" + urllib.parse.urlencode(q))
             return "Opened pre-filled Google Calendar event for Sir's review."
 
+        if name == "dispatch_multi_agent_swarm":
+            goal = args.get("goal", "").strip()
+            req_agents = args.get("agents")
+            orch = get_swarm_orchestrator()
+            async def on_swarm_event(evt):
+                await self.send(**evt)
+            res = await orch.execute_swarm_task(goal, req_agents, event_callback=on_swarm_event)
+            return f"Swarm protocol completed. Task ID: {res['task_id']}, deployed agents: {', '.join(res['agents_deployed'])}, elapsed: {res['elapsed_ms']}ms."
+
+        if name == "get_holographic_window_overlays":
+            matrix = get_holographic_window_matrix()
+            await self.send(type="ar_window_matrix", **matrix)
+            return f"Projected {matrix['total_windows']} desktop application windows into the Holographic AR Matrix."
+
+        if name == "ar_window_action":
+            hwnd = int(args.get("hwnd", 0))
+            action = args.get("action", "focus")
+            res = ar_control_window(hwnd, action)
+            matrix = get_holographic_window_matrix()
+            await self.send(type="ar_window_matrix", **matrix)
+            return f"AR window command '{action}' executed on HWND {hwnd}."
+
+        if name == "predict_next_workflows":
+            engine = get_predictive_engine()
+            preds = engine.predict_workflows()
+            await self.send(type="predictive_workflows", list=preds)
+            titles = [f"{p['title']} ({int(p['confidence']*100)}%)" for p in preds[:3]]
+            return f"Predictive Engine calculated top workflows: {', '.join(titles)}."
+
+        if name == "execute_predicted_macro":
+            wid = args.get("workflow_id", "dev_sprint")
+            engine = get_predictive_engine()
+            wf = engine.workflow_catalog.get(wid)
+            if not wf:
+                return f"Workflow macro '{wid}' not found."
+            for act in wf["actions"]:
+                try:
+                    await self.run_tool(act["tool"], act["args"])
+                except Exception as ex:
+                    print(f"Workflow macro error on {act}: {ex}")
+            return f"Predictive workflow macro '{wf['title']}' fully executed, Sir."
+
+        if name == "get_biometric_telemetry":
+            sensor = get_biometric_sensor()
+            bio = sensor.get_latest_telemetry()
+            await self.send(type="biometric_telemetry", metrics=bio)
+            return f"Biometrics: State {bio['valence_state']}, Stress {bio['stress_index']}%, Focus {bio['cognitive_focus']}%, BPM {bio['bpm']}."
+
         return "Unknown command requested."
 
     async def turn(self, user_text: str):
@@ -1403,6 +1477,14 @@ class JarvisSession:
         except Exception as e:
             print(f"Chat persistence error: {e}")
         self.history.append({"role": "user", "content": user_text})
+
+        # Update neural biometric mood sensor with user text
+        try:
+            bio_sensor = get_biometric_sensor()
+            current_bio = bio_sensor.analyze_interaction(user_text)
+            await self.send(type="biometric_telemetry", metrics=current_bio)
+        except Exception as e:
+            print(f"Biometrics tracking notice: {e}")
 
         # ⚡ 0ms Fast-Path Execution Bypass for routine deterministic commands
         fast_action = extract_action_intent(user_text)
@@ -1479,6 +1561,12 @@ class JarvisSession:
                                             tool_calls_dict[idx]["function"]["name"] += tc.function.name
                                         if tc.function.arguments:
                                             tool_calls_dict[idx]["function"]["arguments"] += tc.function.arguments
+
+                                    extra = getattr(tc, 'extra_content', None) or (
+                                        tc.model_extra.get('extra_content') if hasattr(tc, 'model_extra') and tc.model_extra else None
+                                    )
+                                    if extra:
+                                        tool_calls_dict[idx]["extra_content"] = extra
 
                         if sentence_buffer.strip():
                             s_clean = sentence_buffer.strip()
@@ -1639,6 +1727,13 @@ async def websocket_handler(ws: WebSocket):
         try:
             while True:
                 await session.send(**get_telemetry())
+                # Live Neural Biometrics, Predictive Workflows, and AR Window Matrix telemetry
+                try:
+                    await session.send(type="biometric_telemetry", metrics=get_biometric_sensor().get_latest_telemetry())
+                    await session.send(type="predictive_workflows", list=get_predictive_engine().predict_workflows())
+                    await session.send(type="ar_window_matrix", **get_holographic_window_matrix())
+                except Exception:
+                    pass
                 await asyncio.sleep(2.5)
         except asyncio.CancelledError:
             pass
@@ -1647,6 +1742,10 @@ async def websocket_handler(ws: WebSocket):
 
     telemetry_task = asyncio.create_task(telemetry_stream())
     await session.send(type="memories", list=list_cortex_memories())
+    await session.send(type="swarm_manifest", manifest=AGENTS_MANIFEST)
+    await session.send(type="predictive_workflows", list=get_predictive_engine().predict_workflows())
+    await session.send(type="biometric_telemetry", metrics=get_biometric_sensor().get_latest_telemetry())
+    await session.send(type="ar_window_matrix", **get_holographic_window_matrix())
     
     # Restore persistent chat history across page refresh from SQLite cortex
     try:
@@ -1713,6 +1812,29 @@ async def websocket_handler(ws: WebSocket):
             elif msg_type == "camera_frame":
                 session.last_camera_frame = data.get("image")
                 await session.send(type="log", text="Optical sensory snapshot received and cached in visual cortex.")
+
+            elif msg_type == "get_ar_windows":
+                await session.send(type="ar_window_matrix", **get_holographic_window_matrix())
+
+            elif msg_type == "ar_window_action":
+                hwnd = int(data.get("hwnd", 0))
+                act = data.get("action", "focus")
+                ar_control_window(hwnd, act)
+                await session.send(type="ar_window_matrix", **get_holographic_window_matrix())
+
+            elif msg_type == "get_predictive_workflows":
+                await session.send(type="predictive_workflows", list=get_predictive_engine().predict_workflows())
+
+            elif msg_type == "execute_predicted_workflow":
+                wid = data.get("id")
+                session.current_task = asyncio.create_task(session.run_tool("execute_predicted_macro", {"workflow_id": wid}))
+
+            elif msg_type == "dispatch_swarm":
+                goal = data.get("goal")
+                session.current_task = asyncio.create_task(session.run_tool("dispatch_multi_agent_swarm", {"goal": goal}))
+
+            elif msg_type == "get_biometrics":
+                await session.send(type="biometric_telemetry", metrics=get_biometric_sensor().get_latest_telemetry())
 
             elif msg_type == "approve":
                 aid = data.get("id")

@@ -1160,6 +1160,218 @@ body {
   color: var(--cyan);
 }
 
+/* Neural Biometric ECG Card */
+.biometric-card {
+  background: rgba(4, 16, 28, 0.75);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  box-shadow: inset 0 0 15px rgba(0, 240, 255, 0.03);
+}
+.biometric-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-hud);
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--dim);
+}
+.biometric-metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+  padding-top: 2px;
+}
+.bio-metric-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.bio-metric-label {
+  font-size: 8px;
+  color: var(--dim);
+  letter-spacing: 0.5px;
+}
+.bio-metric-val {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--cyan);
+}
+#ecg-canvas {
+  width: 100%;
+  height: 42px;
+  background: rgba(1, 6, 12, 0.8);
+  border: 1px solid rgba(0, 240, 255, 0.15);
+  border-radius: 4px;
+}
+
+/* Predictive Workflows Bar */
+.predictive-bar-container {
+  padding: 6px 12px;
+  background: rgba(2, 8, 16, 0.65);
+  border-bottom: 1px solid rgba(0, 240, 255, 0.15);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.predictive-label {
+  font-family: var(--font-hud);
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  color: var(--cyan);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.predictive-chip {
+  background: rgba(0, 240, 255, 0.08);
+  border: 1px solid rgba(0, 240, 255, 0.28);
+  border-radius: 4px;
+  color: var(--txt);
+  padding: 4px 8px;
+  font-size: 10px;
+  font-family: var(--font-body);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.predictive-chip:hover {
+  background: rgba(0, 240, 255, 0.25);
+  border-color: var(--cyan);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+  transform: translateY(-1px);
+}
+.predictive-conf {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--emerald);
+  background: rgba(0, 255, 136, 0.12);
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+
+/* Multi-Agent Swarm Widget */
+.swarm-panel {
+  background: rgba(4, 16, 28, 0.75);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.swarm-agents-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.swarm-agent-card {
+  background: rgba(1, 6, 14, 0.7);
+  border: 1px solid rgba(0, 240, 255, 0.15);
+  border-radius: 4px;
+  padding: 6px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+.swarm-agent-card.active {
+  border-color: var(--cyan);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+  background: rgba(0, 240, 255, 0.1);
+}
+.swarm-agent-name {
+  font-family: var(--font-hud);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.swarm-thought-log {
+  font-size: 11px;
+  color: var(--dim);
+  font-family: var(--font-mono);
+  padding: 6px 8px;
+  background: rgba(1, 6, 12, 0.7);
+  border-radius: 3px;
+  border-left: 2px solid var(--cyan);
+  min-height: 28px;
+}
+
+/* 2.5D AR Window Radar Drawer / Lightbox */
+#ar-drawer {
+  position: fixed;
+  top: 0;
+  right: -520px;
+  width: 500px;
+  height: 100vh;
+  background: rgba(2, 8, 16, 0.95);
+  backdrop-filter: blur(16px);
+  border-left: 1px solid var(--cyan);
+  box-shadow: -10px 0 35px rgba(0, 0, 0, 0.8);
+  z-index: 1000;
+  transition: right 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+}
+#ar-drawer.open { right: 0; }
+.ar-header {
+  padding: 14px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+  font-family: var(--font-hud);
+  letter-spacing: 1.5px;
+}
+.ar-window-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ar-window-card {
+  background: rgba(4, 16, 28, 0.8);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 5px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+  transition: all 0.2s ease;
+}
+.ar-window-card:hover {
+  border-color: var(--cyan);
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.15);
+}
+.ar-window-card.focused {
+  border-color: var(--emerald);
+  box-shadow: 0 0 15px rgba(0, 255, 136, 0.2);
+}
+.ar-win-actions {
+  display: flex;
+  gap: 5px;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
 /* Optics Toolbar & Interactive Reticle */
 .optics-toolbar {
   display: flex;
@@ -1383,6 +1595,33 @@ body {
         <option value="">Default System Microphone</option>
       </select>
     </div>
+
+    <!-- Neural Biometrics & ECG Oscilloscope -->
+    <div class="biometric-card">
+      <div class="biometric-header">
+        <span>NEURAL BIOMETRICS & ECG PULSE</span>
+        <span id="bio-state-badge" class="cortex-badge" style="background: rgba(0, 240, 255, 0.2); color: var(--cyan);">CALM FOCUSED</span>
+      </div>
+      <canvas id="ecg-canvas" width="310" height="42"></canvas>
+      <div class="biometric-metrics-grid">
+        <div class="bio-metric-item">
+          <span class="bio-metric-label">STRESS INDEX</span>
+          <span class="bio-metric-val" id="bio-stress-val" style="color: var(--cyan);">22%</span>
+          <div class="bar-track" style="height: 3px;"><div class="bar-fill" id="bio-stress-bar" style="width: 22%; background: var(--cyan);"></div></div>
+        </div>
+        <div class="bio-metric-item">
+          <span class="bio-metric-label">COGNITIVE FOCUS</span>
+          <span class="bio-metric-val" id="bio-focus-val" style="color: var(--emerald);">85%</span>
+          <div class="bar-track" style="height: 3px;"><div class="bar-fill" id="bio-focus-bar" style="width: 85%; background: var(--emerald);"></div></div>
+        </div>
+        <div class="bio-metric-item">
+          <span class="bio-metric-label">ESTIMATED BPM</span>
+          <span class="bio-metric-val" id="bio-bpm-val" style="color: var(--amber);">72 BPM</span>
+          <div class="bar-track" style="height: 3px;"><div class="bar-fill" id="bio-bpm-bar" style="width: 60%; background: var(--amber);"></div></div>
+        </div>
+      </div>
+      <div id="bio-rec-text" style="font-size: 10px; color: var(--dim); line-height: 1.3;">Biometric vitals balanced. Workstation nominal and attentive, Sir.</div>
+    </div>
   </div>
 </section>
 
@@ -1390,12 +1629,37 @@ body {
 <section class="hud-panel chat-col">
   <div class="hud-header">
     <span>J.A.R.V.I.S. // FULL HANDS-ON PC INTERFACE</span>
-    <div style="display: flex; align-items: center; gap: 8px;">
+    <div style="display: flex; align-items: center; gap: 6px;">
+      <button class="stark-btn mini" onclick="openArDrawer()" title="Holographic 2.5D AR Window Radar Matrix">🪟 AR WINDOWS</button>
+      <button class="stark-btn mini" onclick="promptSwarmDispatch()" title="Autonomous Multi-Agent Swarm Orchestrator">🚀 SWARM</button>
       <button class="stark-btn mini" id="sfx-toggle-btn" onclick="toggleSFX()" title="Synthesized Cybernetic Sound FX">🔊 SFX: ON</button>
-      <button class="stark-btn mini" id="pip-btn" onclick="toggleFloatingBubble()" title="Pop-out Attentive Corner Bubble">🔮 FLOATING BUBBLE</button>
+      <button class="stark-btn mini" id="pip-btn" onclick="toggleFloatingBubble()" title="Pop-out Attentive Corner Bubble">🔮 BUBBLE</button>
       <button class="stark-btn mini" onclick="clearChatLog()" title="Clear Chat Stream">🧹 CLEAR</button>
       <button class="stark-btn mini" onclick="openMemoryDrawer()" title="Open Persistent Vector Memory Cortex">🧠 CORTEX</button>
-      <span style="font-family: var(--font-mono); font-size: 10px; color: var(--emerald);" id="auth-status-tag">AUTONOMY: MAXIMUM</span>
+      <span style="font-family: var(--font-mono); font-size: 10px; color: var(--emerald);" id="auth-status-tag">AUTONOMY: MAX</span>
+    </div>
+  </div>
+
+  <!-- Predictive Workflow Action Directives Bar -->
+  <div class="predictive-bar-container" id="predictive-bar-container">
+    <div class="predictive-label"><span>⚡ PREDICTIVE WORKFLOWS:</span></div>
+    <div id="predictive-chips-wrapper" style="display: flex; gap: 6px; align-items: center;">
+      <div class="predictive-chip" onclick="executePredictedWorkflow('dev_sprint')">
+        <span>⚡ DEV SPRINT</span>
+        <span class="predictive-conf">94%</span>
+      </div>
+      <div class="predictive-chip" onclick="executePredictedWorkflow('executive_briefing')">
+        <span>🌅 BRIEFING</span>
+        <span class="predictive-conf">96%</span>
+      </div>
+      <div class="predictive-chip" onclick="executePredictedWorkflow('deep_focus')">
+        <span>🛡️ DEEP FOCUS</span>
+        <span class="predictive-conf">85%</span>
+      </div>
+      <div class="predictive-chip" onclick="executePredictedWorkflow('optical_scan')">
+        <span>👁️ OPTICAL SCAN</span>
+        <span class="predictive-conf">88%</span>
+      </div>
     </div>
   </div>
 
@@ -1497,6 +1761,41 @@ body {
     </div>
   </div>
 
+  <!-- Multi-Agent Swarm Orchestrator Card -->
+  <span class="protocols-label">MULTI-AGENT SWARM ORCHESTRATOR</span>
+  <div class="swarm-panel">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <span style="font-family: var(--font-hud); font-size: 9px; letter-spacing: 1px; color: var(--dim);">ACTIVE CLUSTER NODES</span>
+      <span class="cortex-badge" style="background: rgba(0, 240, 255, 0.15); color: var(--cyan);" id="swarm-status-badge">4 SPECIALISTS READY</span>
+    </div>
+    <div class="swarm-agents-grid">
+      <div class="swarm-agent-card" id="swarm-node-cortex">
+        <span>🧠</span>
+        <span class="swarm-agent-name" style="color: #00f0ff;">CORTEX</span>
+      </div>
+      <div class="swarm-agent-card" id="swarm-node-sentinel">
+        <span>🛡️</span>
+        <span class="swarm-agent-name" style="color: #00ff88;">SENTINEL</span>
+      </div>
+      <div class="swarm-agent-card" id="swarm-node-tactical">
+        <span>⚡</span>
+        <span class="swarm-agent-name" style="color: #ffaa00;">TACTICAL</span>
+      </div>
+      <div class="swarm-agent-card" id="swarm-node-optical">
+        <span>👁️</span>
+        <span class="swarm-agent-name" style="color: #ff2840;">OPTICAL</span>
+      </div>
+    </div>
+    <div class="bar-track" style="height: 4px; margin-top: 2px;">
+      <div class="bar-fill" id="swarm-progress-bar" style="width: 0%; background: linear-gradient(90deg, var(--cyan), var(--emerald));"></div>
+    </div>
+    <div class="swarm-thought-log" id="swarm-thought-log">Standby. Ready to deploy autonomous multi-agent swarm directives.</div>
+    <div style="display: flex; gap: 6px; justify-content: flex-end;">
+      <button class="stark-btn mini" onclick="quickSwarm('Perform comprehensive security, hardware vitals, and workstation alignment sweep.')">🛡️ SWEEP</button>
+      <button class="stark-btn mini" onclick="promptSwarmDispatch()">🚀 DEPLOY SWARM</button>
+    </div>
+  </div>
+
   <span class="protocols-label">DIAGNOSTIC EVENT LOG</span>
   <div class="diag-console" id="diag-console">
     <div class="log-line">Full hands-on execution authority verified.</div>
@@ -1550,6 +1849,23 @@ body {
       <input type="text" id="new-mem-input" class="hud-input" placeholder="Commit durable fact..." style="font-size: 12px; padding: 7px 10px; flex: 1;" onkeydown="if(event.key==='Enter')addMemoryManual()">
       <button class="stark-btn" onclick="addMemoryManual()" style="padding: 7px 12px; font-size: 11px;">COMMIT</button>
     </div>
+  </div>
+</div>
+
+<!-- Slide-out Holographic AR Window Radar Drawer -->
+<div id="ar-drawer">
+  <div class="ar-header">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span style="color: var(--cyan); font-weight: bold;">HOLOGRAPHIC AR WINDOW RADAR</span>
+      <span class="cortex-badge" id="ar-win-count-badge">0 WINDOWS</span>
+    </div>
+    <div style="display: flex; gap: 8px; align-items: center;">
+      <button class="stark-btn mini" onclick="refreshArWindows()">🔄 SCAN</button>
+      <button class="drawer-close" onclick="closeArDrawer()" title="Close AR Radar">&times;</button>
+    </div>
+  </div>
+  <div class="ar-window-list" id="ar-window-list">
+    <!-- Populated dynamically via renderArWindows() -->
   </div>
 </div>
 
@@ -2886,9 +3202,6 @@ function getLiveAudioEnergy() {
     frequencies: null
   };
 }
-    frequencies: null
-  };
-}
 
 function submitTask(text) {
   text = text.trim();
@@ -3402,6 +3715,14 @@ function handleWSMessage(e) {
     const evt = msg.event || {};
     appendDiagLog(`⚡ SENTINEL: [${(evt.category || 'ALERT').toUpperCase()}] ${evt.log || evt.speech || ''}`);
     playSound('chime');
+  } else if (msg.type === 'biometric_telemetry') {
+    renderBiometricTelemetry(msg.metrics);
+  } else if (msg.type === 'predictive_workflows') {
+    renderPredictiveWorkflows(msg.list);
+  } else if (msg.type === 'ar_window_matrix') {
+    renderArWindows(msg);
+  } else if (msg.type === 'swarm_event') {
+    renderSwarmEvent(msg);
   } else if (msg.type === 'core_mode') {
     const isOffline = (msg.mode === 'offline');
     const toggle = $('#offline-toggle');
@@ -4271,6 +4592,313 @@ function appendSuggestionChips(container = null, customChips = null) {
   }
 }
 
+// ---------------------------------------------------------------------
+// NEURAL BIOMETRICS & ECG OSCILLOSCOPE ENGINE
+// ---------------------------------------------------------------------
+let ecgBpm = 72;
+let ecgAnimId = null;
+
+function initEcgCanvas() {
+  const canvas = document.getElementById('ecg-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width;
+  const h = canvas.height;
+  const midY = h / 2;
+  
+  let phase = 0;
+  const buffer = new Float32Array(w).fill(midY);
+
+  function getEcgSample(t) {
+    const norm = t % 1;
+    let v = 0;
+    if (norm > 0.15 && norm < 0.25) {
+      v += Math.sin((norm - 0.15) / 0.1 * Math.PI) * 4;
+    } else if (norm >= 0.30 && norm < 0.33) {
+      v -= Math.sin((norm - 0.30) / 0.03 * Math.PI) * 3;
+    } else if (norm >= 0.33 && norm < 0.39) {
+      v += Math.sin((norm - 0.33) / 0.06 * Math.PI) * 16;
+    } else if (norm >= 0.39 && norm < 0.44) {
+      v -= Math.sin((norm - 0.39) / 0.05 * Math.PI) * 6;
+    } else if (norm >= 0.52 && norm < 0.68) {
+      v += Math.sin((norm - 0.52) / 0.16 * Math.PI) * 5;
+    }
+    v += (Math.random() - 0.5) * 0.8;
+    return midY - v;
+  }
+
+  function drawFrame() {
+    const speed = (ecgBpm / 60) * 0.009;
+    phase += speed;
+    
+    for (let i = 0; i < w - 1; i++) {
+      buffer[i] = buffer[i + 1];
+    }
+    buffer[w - 1] = getEcgSample(phase);
+
+    ctx.clearRect(0, 0, w, h);
+
+    ctx.strokeStyle = 'rgba(0, 240, 255, 0.08)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let y = 10; y < h; y += 10) {
+      ctx.moveTo(0, y);
+      ctx.lineTo(w, y);
+    }
+    for (let x = 20; x < w; x += 20) {
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, h);
+    }
+    ctx.stroke();
+
+    ctx.strokeStyle = '#00f0ff';
+    ctx.lineWidth = 1.6;
+    ctx.shadowColor = '#00f0ff';
+    ctx.shadowBlur = 4;
+    ctx.beginPath();
+    ctx.moveTo(0, buffer[0]);
+    for (let i = 1; i < w; i++) {
+      ctx.lineTo(i, buffer[i]);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#00ff88';
+    ctx.beginPath();
+    ctx.arc(w - 2, buffer[w - 1], 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ecgAnimId = requestAnimationFrame(drawFrame);
+  }
+
+  if (ecgAnimId) cancelAnimationFrame(ecgAnimId);
+  ecgAnimId = requestAnimationFrame(drawFrame);
+}
+
+function renderBiometricTelemetry(m) {
+  if (!m) return;
+  const stressVal = document.getElementById('bio-stress-val');
+  const stressBar = document.getElementById('bio-stress-bar');
+  const focusVal = document.getElementById('bio-focus-val');
+  const focusBar = document.getElementById('bio-focus-bar');
+  const bpmVal = document.getElementById('bio-bpm-val');
+  const bpmBar = document.getElementById('bio-bpm-bar');
+  const badge = document.getElementById('bio-state-badge');
+  const rec = document.getElementById('bio-rec-text');
+
+  if (m.stress_index !== undefined) {
+    if (stressVal) stressVal.textContent = `${Math.round(m.stress_index)}%`;
+    if (stressBar) {
+      stressBar.style.width = `${Math.min(100, Math.max(0, m.stress_index))}%`;
+      stressBar.style.background = m.stress_index > 65 ? 'var(--red)' : (m.stress_index > 40 ? 'var(--amber)' : 'var(--cyan)');
+    }
+  }
+
+  if (m.cognitive_focus !== undefined) {
+    if (focusVal) focusVal.textContent = `${Math.round(m.cognitive_focus)}%`;
+    if (focusBar) focusBar.style.width = `${Math.min(100, Math.max(0, m.cognitive_focus))}%`;
+  }
+
+  if (m.estimated_bpm !== undefined) {
+    ecgBpm = m.estimated_bpm;
+    if (bpmVal) bpmVal.textContent = `${m.estimated_bpm} BPM`;
+    if (bpmBar) {
+      const bpmPct = Math.min(100, Math.max(20, ((m.estimated_bpm - 50) / 70) * 100));
+      bpmBar.style.width = `${bpmPct}%`;
+    }
+  }
+
+  if (badge && m.valence_state) {
+    const formatted = m.valence_state.replace(/_/g, ' ');
+    badge.textContent = formatted;
+    if (m.valence_state === 'ALERT_CRITICAL') {
+      badge.style.background = 'rgba(255, 40, 64, 0.25)';
+      badge.style.color = 'var(--red)';
+    } else if (m.valence_state === 'ELEVATED_STRESS') {
+      badge.style.background = 'rgba(255, 170, 0, 0.25)';
+      badge.style.color = 'var(--amber)';
+    } else if (m.valence_state === 'OPTIMAL_FLOW') {
+      badge.style.background = 'rgba(0, 255, 136, 0.25)';
+      badge.style.color = 'var(--emerald)';
+    } else {
+      badge.style.background = 'rgba(0, 240, 255, 0.2)';
+      badge.style.color = 'var(--cyan)';
+    }
+  }
+
+  if (rec && m.recommendation) {
+    rec.textContent = m.recommendation;
+  }
+}
+
+// ---------------------------------------------------------------------
+// PREDICTIVE WORKFLOW AUTOMATION ENGINE
+// ---------------------------------------------------------------------
+function renderPredictiveWorkflows(list) {
+  if (!list || !Array.isArray(list) || list.length === 0) return;
+  const wrapper = document.getElementById('predictive-chips-wrapper');
+  if (!wrapper) return;
+
+  wrapper.innerHTML = '';
+  list.slice(0, 4).forEach(wf => {
+    const chip = document.createElement('div');
+    chip.className = 'predictive-chip';
+    chip.title = `${wf.title}: ${wf.description || ''}`;
+    chip.innerHTML = `
+      <span>${escapeHtml(wf.icon || '⚡')} ${escapeHtml(wf.title.toUpperCase())}</span>
+      <span class="predictive-conf">${wf.confidence}%</span>
+    `;
+    chip.onclick = () => executePredictedWorkflow(wf.id, wf.title);
+    wrapper.appendChild(chip);
+  });
+}
+
+function executePredictedWorkflow(workflowId, title) {
+  playSound('click');
+  sendWS({ type: 'execute_predicted_workflow', workflow_id: workflowId });
+  appendDiagLog(`⚡ Predictive Macro Triggered: ${title || workflowId}`);
+  const chatLog = document.getElementById('chat-log');
+  if (chatLog) {
+    const d = document.createElement('div');
+    d.className = 'bubble user';
+    d.textContent = `Execute predictive workflow: ${title || workflowId}`;
+    chatLog.appendChild(d);
+    chatLog.scrollTop = 1e9;
+  }
+}
+
+// ---------------------------------------------------------------------
+// AUTONOMOUS MULTI-AGENT SWARM ORCHESTRATOR
+// ---------------------------------------------------------------------
+function renderSwarmEvent(e) {
+  if (!e) return;
+  const badge = document.getElementById('swarm-status-badge');
+  const bar = document.getElementById('swarm-progress-bar');
+  const log = document.getElementById('swarm-thought-log');
+
+  const nodes = ['cortex', 'sentinel', 'tactical', 'optical'];
+  nodes.forEach(n => {
+    const el = document.getElementById(`swarm-node-${n}`);
+    if (el) el.classList.remove('active');
+  });
+
+  if (e.agent) {
+    const activeNode = document.getElementById(`swarm-node-${e.agent.toLowerCase()}`);
+    if (activeNode) activeNode.classList.add('active');
+  }
+
+  if (badge) {
+    const stageStr = (e.stage || 'PROCESSING').toUpperCase();
+    badge.textContent = `${stageStr} (${Math.round((e.progress || 0) * 100)}%)`;
+  }
+
+  if (bar) {
+    bar.style.width = `${Math.min(100, Math.round((e.progress || 0) * 100))}%`;
+  }
+
+  if (log && e.thought) {
+    log.textContent = `[${(e.agent || 'ORCHESTRATOR').toUpperCase()}] ${e.thought}`;
+  }
+
+  if (e.stage === 'completed') {
+    playSound('chime');
+    appendDiagLog(`🚀 Multi-Agent Swarm completed task: ${e.task_id || ''}`);
+  }
+}
+
+function promptSwarmDispatch() {
+  const goal = prompt("Deploy Autonomous Multi-Agent Swarm Directive:", "Perform workstation security sweep, analyze resource telemetry, and optimize pending workflows.");
+  if (goal && goal.trim()) {
+    quickSwarm(goal.trim());
+  }
+}
+
+function quickSwarm(goal) {
+  playSound('chime');
+  sendWS({ type: 'dispatch_swarm', goal: goal });
+  appendDiagLog(`🚀 Dispatched Swarm: ${goal}`);
+  const chatLog = document.getElementById('chat-log');
+  if (chatLog) {
+    const d = document.createElement('div');
+    d.className = 'bubble user';
+    d.textContent = `Deploy Swarm: ${goal}`;
+    chatLog.appendChild(d);
+    chatLog.scrollTop = 1e9;
+  }
+}
+
+// ---------------------------------------------------------------------
+// HOLOGRAPHIC AR WINDOW RADAR MATRIX
+// ---------------------------------------------------------------------
+function openArDrawer() {
+  const drawer = document.getElementById('ar-drawer');
+  if (drawer) {
+    drawer.classList.add('open');
+    refreshArWindows();
+    playSound('click');
+  }
+}
+
+function closeArDrawer() {
+  const drawer = document.getElementById('ar-drawer');
+  if (drawer) drawer.classList.remove('open');
+}
+
+function refreshArWindows() {
+  sendWS({ type: 'get_ar_windows' });
+  appendDiagLog("Scanning desktop window geometry & telemetry...");
+}
+
+function renderArWindows(data) {
+  if (!data) return;
+  const badge = document.getElementById('ar-win-count-badge');
+  const list = document.getElementById('ar-window-list');
+  if (!list) return;
+
+  const windows = data.windows || [];
+  if (badge) badge.textContent = `${windows.length} WINDOWS`;
+
+  list.innerHTML = '';
+  if (windows.length === 0) {
+    list.innerHTML = '<div style="font-size: 11px; color: var(--dim); padding: 12px; text-align: center;">No active top-level desktop windows detected, Sir.</div>';
+    return;
+  }
+
+  windows.forEach(w => {
+    const card = document.createElement('div');
+    card.className = `ar-window-card ${w.is_focused ? 'focused' : ''}`;
+    const rectStr = `${w.rect.w}×${w.rect.h} at (${w.rect.x}, ${w.rect.y})`;
+
+    card.innerHTML = `
+      <div class="ar-window-header">
+        <span class="ar-window-title" title="${escapeHtml(w.title)}">${escapeHtml(w.title)}</span>
+        <span class="ar-window-pid">${w.is_focused ? '● FOCUSED' : `PID ${w.pid}`}</span>
+      </div>
+      <div class="ar-window-meta">
+        <span>RAM: ${w.ram_mb} MB</span>
+        <span>CPU: ${w.cpu_pct}%</span>
+        <span>DIM: ${rectStr}</span>
+      </div>
+      <div class="ar-window-actions">
+        <button class="ar-act-btn" onclick="arWindowAction(${w.hwnd}, 'focus')">FOCUS</button>
+        <button class="ar-act-btn" onclick="arWindowAction(${w.hwnd}, 'snap_left')">SNAP L</button>
+        <button class="ar-act-btn" onclick="arWindowAction(${w.hwnd}, 'snap_right')">SNAP R</button>
+        <button class="ar-act-btn" onclick="arWindowAction(${w.hwnd}, 'maximize')">MAX</button>
+        <button class="ar-act-btn" onclick="arWindowAction(${w.hwnd}, 'minimize')">MIN</button>
+        <button class="ar-act-btn" onclick="arWindowAction(${w.hwnd}, 'close')" style="color: var(--red);">CLOSE</button>
+      </div>
+    `;
+    list.appendChild(card);
+  });
+}
+
+function arWindowAction(hwnd, action) {
+  playSound('click');
+  sendWS({ type: 'ar_window_action', hwnd: hwnd, action: action });
+  appendDiagLog(`🪟 AR Action on HWND ${hwnd}: ${action.toUpperCase()}`);
+  setTimeout(refreshArWindows, 350);
+}
+
 function restoreChatHistory(messages) {
   if (!messages || messages.length === 0) return;
   const chatLog = document.getElementById('chat-log');
@@ -4309,6 +4937,7 @@ function bootJarvis() {
   connectWebSocket();
   initArcReactor3D();
   initCpuSparkline();
+  initEcgCanvas();
   setupOpticsInteractivity();
   initReactorFluctuations();
   appendSuggestionChips();
