@@ -1372,8 +1372,8 @@ body {
   padding-top: 4px;
 }
 
-/* Quantum P2P, Self-Patch, Voice Studio, & Focus Mode Drawers */
-#p2p-drawer, #self-patch-drawer, #voice-studio-drawer, #focus-drawer {
+/* Quantum P2P, Self-Patch, Voice Studio, Focus Mode, & Mood Drawers */
+#p2p-drawer, #self-patch-drawer, #voice-studio-drawer, #focus-drawer, #mood-drawer {
   position: fixed;
   top: 0;
   right: -560px;
@@ -1388,7 +1388,7 @@ body {
   display: flex;
   flex-direction: column;
 }
-#p2p-drawer.open, #self-patch-drawer.open, #voice-studio-drawer.open, #focus-drawer.open { right: 0; }
+#p2p-drawer.open, #self-patch-drawer.open, #voice-studio-drawer.open, #focus-drawer.open, #mood-drawer.open { right: 0; }
 
 /* Focus Mode Floating HUD Banner */
 #focus-active-banner {
@@ -1409,6 +1409,27 @@ body {
 @keyframes focusPulse {
   0%, 100% { border-color: rgba(255, 62, 62, 0.45); box-shadow: 0 0 12px rgba(255, 62, 62, 0.15); }
   50% { border-color: rgba(0, 240, 255, 0.6); box-shadow: 0 0 20px rgba(0, 240, 255, 0.25); }
+}
+
+/* Proactive Mood Video Call / Empathic Vigil Banner */
+#mood-vigil-banner {
+  display: none;
+  background: linear-gradient(90deg, rgba(0, 240, 255, 0.18) 0%, rgba(255, 170, 0, 0.15) 100%);
+  border: 1px solid rgba(0, 240, 255, 0.55);
+  border-radius: 4px;
+  padding: 8px 14px;
+  margin: 6px 12px 6px 12px;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 0 18px rgba(0, 240, 255, 0.25);
+  animation: moodPulse 3s infinite ease-in-out;
+}
+#mood-vigil-banner.active {
+  display: flex;
+}
+@keyframes moodPulse {
+  0%, 100% { border-color: rgba(0, 240, 255, 0.55); box-shadow: 0 0 14px rgba(0, 240, 255, 0.2); }
+  50% { border-color: rgba(255, 170, 0, 0.65); box-shadow: 0 0 22px rgba(255, 170, 0, 0.3); }
 }
 
 .drawer-body-scroll {
@@ -1735,6 +1756,7 @@ body {
   <div class="hud-header">
     <span>J.A.R.V.I.S. // FULL HANDS-ON PC INTERFACE</span>
     <div style="display: flex; align-items: center; gap: 6px;">
+      <button class="stark-btn mini" id="mood-hud-btn" onclick="openMoodDrawer()" title="Proactive Facial Mood & Video Call Comfort Sentinel">❤️ MOOD</button>
       <button class="stark-btn mini" id="focus-hud-btn" onclick="openFocusDrawer()" title="Engage Study & Deep Work Focus Protocol (Game Deflector)">🔒 FOCUS</button>
       <button class="stark-btn mini" onclick="openP2PDrawer()" title="Quantum-Grade Encrypted P2P Communications Mesh">🔐 P2P</button>
       <button class="stark-btn mini" onclick="openSelfPatchDrawer()" title="Autonomous Code Self-Patching Runtime">🧬 PATCH</button>
@@ -1786,6 +1808,31 @@ body {
       <div style="font-size: 10px; font-family: var(--font-mono); color: var(--amber);" id="focus-banner-deflections">🛡️ 0 BLOCKED</div>
       <button class="stark-btn mini" onclick="endFocusMode()" style="background: rgba(255, 62, 62, 0.25); border-color: var(--crimson); color: #fff; font-size: 10px; padding: 2px 8px;">DISENGAGE</button>
     </div>
+  </div>
+
+  <!-- Active Proactive Mood Video Call / Empathic Vigil Banner -->
+  <div id="mood-vigil-banner">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <div id="mood-pulse-dot" style="width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 8px var(--cyan); animation: pulse 1.2s infinite;"></div>
+      <div style="font-family: var(--font-hud); font-size: 11px; letter-spacing: 0.5px;">
+        <span style="color: var(--cyan); font-weight: bold;">[EMPATHIC VIGIL // VIDEO CALL]</span>
+        <span id="mood-banner-state" style="color: var(--amber); margin-left: 6px;">AWAITING SIR'S RESPONSE</span>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <span class="cortex-badge" id="mood-banner-emotion-badge" style="background: rgba(255, 62, 62, 0.2); color: #ff6b6b; font-size: 10px;">😟 MELANCHOLIC</span>
+      <div style="font-family: var(--font-mono); font-size: 11px; color: var(--dim);" id="mood-banner-timer">PING 1/3 (25s)</div>
+      <button class="stark-btn mini" onclick="stopMoodCall()" style="background: rgba(255, 62, 62, 0.2); border-color: var(--crimson); color: #fff; font-size: 10px; padding: 2px 8px;">DISMISS</button>
+    </div>
+  </div>
+
+  <!-- Quick Empathic Response Chips when Vigil is Active -->
+  <div id="mood-quick-replies" style="display: none; padding: 4px 12px; gap: 6px; flex-wrap: wrap;">
+    <div class="chip-btn" onclick="quickReplyToMood('I had a really rough day, Jarvis.')">💬 Rough day today</div>
+    <div class="chip-btn" onclick="quickReplyToMood('I am just feeling completely exhausted and drained.')">💬 Feeling drained</div>
+    <div class="chip-btn" onclick="quickReplyToMood('I am okay, just carrying a lot on my mind.')">💬 Carrying a lot</div>
+    <div class="chip-btn" onclick="triggerComfortProtocol('acoustic_relax', 'Soothing ambient harmonies for Sir.')">🎵 Play relaxing acoustics</div>
+    <div class="chip-btn" onclick="triggerComfortProtocol('tea_break', 'Hydration & rest reminder.')">☕ Take 5-min breather</div>
   </div>
 
   <div id="chat-log">
@@ -1853,6 +1900,7 @@ body {
   <span class="protocols-label">OPTICAL SENSORY VIEWPORT</span>
   <div class="optics-toolbar">
     <button class="stark-btn mini" id="optics-cam-btn" onclick="toggleOpticalCamera()" title="Toggle live optical webcam feed in viewport">📹 CAM</button>
+    <button class="stark-btn mini" id="optics-mood-btn" onclick="toggleMoodCall()" title="Start proactive Mood Video Call & Facial Sentiment Analysis">❤️ MOOD CALL</button>
     <button class="stark-btn mini" onclick="quickAction('Take a screenshot with coordinate grid and inspect the display.')" title="Take instantaneous screenshot">📸 SNAP</button>
     <button class="stark-btn mini" onclick="quickAction('Perform an optical neural scan of the display and detect all interactive buttons and elements.')" title="Optical neural text & element scan">👁️ SCAN</button>
     <button class="stark-btn mini" onclick="quickAction('Show desktop')" title="Minimize windows & show desktop">🖥️ DESKTOP</button>
@@ -1865,6 +1913,12 @@ body {
     <div class="optics-viewport-frame" id="optics-viewport-frame" onclick="openOpticsModal()">
       <img id="optics-img" style="display: none; cursor: zoom-in;" referrerpolicy="no-referrer" alt="Optical sensory feed" title="Click to enlarge in holographic lightbox">
       <video id="optics-video" autoplay playsinline muted style="display: none;"></video>
+      <!-- Live Facial Mood Tracking Overlay -->
+      <div id="optics-face-target" style="display: none; position: absolute; border: 2px dashed var(--cyan); border-radius: 6px; pointer-events: none; transition: all 0.25s ease; box-shadow: 0 0 14px rgba(0,240,255,0.4); z-index: 10;">
+        <div id="optics-face-badge" style="position: absolute; top: -20px; left: 0; background: rgba(2, 8, 16, 0.92); border: 1px solid var(--cyan); color: var(--cyan); font-family: var(--font-hud); font-size: 9px; padding: 2px 6px; border-radius: 3px; white-space: nowrap;">
+          SCANNING FACIAL BIOMETRICS...
+        </div>
+      </div>
       <div class="optics-hud-brackets">
         <span class="bracket-tl"></span><span class="bracket-tr"></span>
         <span class="bracket-bl"></span><span class="bracket-br"></span>
@@ -1878,6 +1932,7 @@ body {
     </div>
     <div class="optics-cam-controls" id="optics-cam-controls" style="display: none;">
       <button class="stark-btn mini" onclick="captureCameraSnapshot()" title="Capture instantaneous photo frame">📸 CAPTURE</button>
+      <button class="stark-btn mini" id="mood-scan-now-btn" onclick="scanFaceMoodNow()" title="Scan facial expressions and detect mood immediately">❤️ SCAN MOOD</button>
       <button class="stark-btn mini danger" onclick="stopOpticalCamera()" title="Terminate live optical feed">✕ STOP CAM</button>
     </div>
     <div class="optics-intel-info" id="optics-intel-info" style="display: none;">
@@ -2268,6 +2323,109 @@ body {
       </div>
       <div id="focus-deflection-log" style="font-family: var(--font-mono); font-size: 10px; color: var(--txt); max-height: 160px; overflow-y: auto; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08); padding: 8px; border-radius: 3px;">
         <div style="color: var(--dim); font-style: italic;">No gaming launch attempts recorded during this session. Workstation discipline intact.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Facial Mood Analyzer & Proactive Empathic Video Call Companion Drawer -->
+<div id="mood-drawer">
+  <div class="ar-header">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span style="color: var(--cyan); font-weight: bold;">❤️ FACIAL MOOD & EMPATHIC COMPANION</span>
+      <span class="cortex-badge" id="mood-drawer-status-badge" style="background: rgba(0, 240, 255, 0.2); color: var(--cyan);">STANDBY</span>
+    </div>
+    <button class="drawer-close" onclick="closeMoodDrawer()" title="Close Mood Drawer">&times;</button>
+  </div>
+  <div class="drawer-body-scroll">
+    <!-- Live Facial Mood Telemetry Card -->
+    <div class="stark-card" style="border-color: rgba(0, 240, 255, 0.3);">
+      <div class="stark-card-header">
+        <span>OPTICAL FACIAL MOOD SPECTRUM</span>
+        <span class="cortex-badge" id="mood-confidence-tag" style="color: var(--emerald); font-size: 9px;">CONF: 92%</span>
+      </div>
+      <div style="font-size: 11px; color: var(--dim); line-height: 1.4;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <div>MOOD: <strong id="mood-drawer-name" style="color: var(--cyan); font-size: 13px;">CALM // BALANCED</strong></div>
+          <span class="cortex-badge" id="mood-valence-badge" style="background: rgba(0, 255, 136, 0.15); color: var(--emerald);">VALENCE: +0.2</span>
+        </div>
+        <div style="margin-bottom: 6px;">
+          <div style="display: flex; justify-content: space-between; font-size: 9px; font-family: var(--font-hud); color: var(--dim); margin-bottom: 2px;">
+            <span>DISTRESSED / DOWNCAST</span>
+            <span>OPTIMAL / RADIANT</span>
+          </div>
+          <div class="bar-track" style="height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden;">
+            <div class="bar-fill" id="mood-valence-bar" style="width: 60%; background: linear-gradient(90deg, var(--crimson), var(--amber), var(--emerald)); transition: width 0.4s ease;"></div>
+          </div>
+        </div>
+        <div style="font-size: 10px; color: var(--dim); margin-top: 6px;" id="mood-drawer-cues">
+          Micro-Cues: <span id="mood-cues-text" style="color: var(--txt);">Stable gaze alignment, neutral resting facial tone</span>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 10px;">
+          <button class="stark-btn mini" onclick="scanFaceMoodNow()" style="background: rgba(0, 240, 255, 0.15);"><span id="mood-scan-btn-label">📸 SCAN FACE NOW</span></button>
+          <button class="stark-btn mini" id="mood-call-toggle-btn" onclick="toggleMoodCall()" style="background: rgba(255, 170, 0, 0.2); border-color: var(--amber); color: #fff;">📹 START VIDEO CALL</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Active Proactive Video Call Vigil & Insistence Protocol -->
+    <div class="stark-card">
+      <div class="stark-card-header">
+        <span>PROACTIVE VIDEO CALL VIGIL & FOLLOW-UP SENTINEL</span>
+        <span class="cortex-badge" id="vigil-state-badge" style="color: var(--amber); font-size: 9px;">INSISTENCE: READY</span>
+      </div>
+      <div style="font-size: 11px; color: var(--dim); line-height: 1.4;">
+        <div style="color: var(--txt); margin-bottom: 6px;">
+          When you appear down or troubled, J.A.R.V.I.S. initiates contact first and checks in like a video call companion. If you go quiet, he double-texts and triple-texts to ensure you never carry burdens alone.
+        </div>
+        <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); padding: 8px; border-radius: 4px; font-family: var(--font-mono); font-size: 10px;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
+            <span>PINGS SENT: <strong id="vigil-ping-count" style="color: var(--cyan);">0 / 3</strong></span>
+            <span>NEXT PING: <strong id="vigil-timer-countdown" style="color: var(--amber);">STANDBY</strong></span>
+          </div>
+          <div>LATEST PING: <span id="vigil-last-ping" style="color: var(--dim); font-style: italic;">None yet dispatched.</span></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+          <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 10px; color: var(--dim);">
+            <input type="checkbox" id="mood-autoscan-toggle" checked onchange="toggleAutoMoodScan(this.checked)"> Auto-scan face every 12s when camera is on
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tailored Proactive Comfort Protocols -->
+    <div class="stark-card">
+      <div class="stark-card-header">
+        <span>PROACTIVE COMFORT PROTOCOLS</span>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px;">
+        <div class="stark-card" style="padding: 8px; cursor: pointer; border: 1px solid rgba(0, 240, 255, 0.2); background: rgba(0, 240, 255, 0.03);" onclick="triggerComfortProtocol('acoustic_relax', 'Calming acoustic harmonies for Sir.')">
+          <div style="color: var(--cyan); font-weight: bold; font-size: 11px;">🎵 ACOUSTIC SOOTHING</div>
+          <div style="font-size: 9px; color: var(--dim); margin-top: 2px;">Synthesizes relaxing ambient harmonics & frequencies.</div>
+        </div>
+        <div class="stark-card" style="padding: 8px; cursor: pointer; border: 1px solid rgba(0, 240, 255, 0.2); background: rgba(0, 240, 255, 0.03);" onclick="triggerComfortProtocol('tea_break', 'Hydration and 5-minute breather reminder.')">
+          <div style="color: var(--cyan); font-weight: bold; font-size: 11px;">☕ WARM BREATHER</div>
+          <div style="font-size: 9px; color: var(--dim); margin-top: 2px;">Pause workstation tasks for tea, water, and rest.</div>
+        </div>
+        <div class="stark-card" style="padding: 8px; cursor: pointer; border: 1px solid rgba(0, 240, 255, 0.2); background: rgba(0, 240, 255, 0.03);" onclick="triggerComfortProtocol('dim_lighting', 'Optical glare reduction.')">
+          <div style="color: var(--cyan); font-weight: bold; font-size: 11px;">🛡️ SOFTEN DISPLAY</div>
+          <div style="font-size: 9px; color: var(--dim); margin-top: 2px;">Dims stark interface glare and minimizes stress apps.</div>
+        </div>
+        <div class="stark-card" style="padding: 8px; cursor: pointer; border: 1px solid rgba(0, 240, 255, 0.2); background: rgba(0, 240, 255, 0.03);" onclick="triggerComfortProtocol('empathic_venting', 'Sir wished to vent.')">
+          <div style="color: var(--cyan); font-weight: bold; font-size: 11px;">🗣️ EMPATHIC VENTING</div>
+          <div style="font-size: 9px; color: var(--dim); margin-top: 2px;">Attentive sounding board for whatever is on your mind.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mood History & Telemetry Log -->
+    <div class="stark-card">
+      <div class="stark-card-header">
+        <span>SESSION MOOD BIOMETRIC LOG</span>
+        <span class="cortex-badge" id="mood-log-count" style="color: var(--cyan); font-size: 9px;">0 RECORDS</span>
+      </div>
+      <div id="mood-telemetry-log" style="font-family: var(--font-mono); font-size: 10px; color: var(--txt); max-height: 140px; overflow-y: auto; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08); padding: 8px; border-radius: 3px;">
+        <div style="color: var(--dim); font-style: italic;">No facial mood telemetry logged yet. Click 'Scan Face Now' or activate your camera.</div>
       </div>
     </div>
   </div>
@@ -4137,6 +4295,12 @@ function handleWSMessage(e) {
     handleVoiceAuditionClip(msg);
   } else if (msg.type === 'focus_mode_status') {
     renderFocusStatus(msg);
+  } else if (msg.type === 'face_mood_telemetry') {
+    renderFaceMoodTelemetry(msg);
+  } else if (msg.type === 'mood_vigil_status') {
+    renderMoodVigilStatus(msg);
+  } else if (msg.type === 'comfort_protocol_event') {
+    handleComfortProtocolEvent(msg);
   } else if (msg.type === 'core_mode') {
     const isOffline = (msg.mode === 'offline');
     const toggle = $('#offline-toggle');
@@ -5831,6 +5995,323 @@ function renderFocusStatus(data) {
     }
   }
 }
+
+// ---------------------------------------------------------------------
+// FACIAL BIOMETRIC MOOD ANALYZER & PROACTIVE VIDEO CALL COMPANION
+// ---------------------------------------------------------------------
+let currentMoodVigilActive = false;
+let autoMoodScanEnabled = true;
+let autoMoodScanInterval = null;
+let sessionMoodHistory = [];
+
+function openMoodDrawer() {
+  playSound('click');
+  const d = document.getElementById('mood-drawer');
+  if (d) {
+    d.classList.add('open');
+    sendWS({ type: 'get_mood_status' });
+  }
+}
+
+function closeMoodDrawer() {
+  const d = document.getElementById('mood-drawer');
+  if (d) d.classList.remove('open');
+}
+
+function toggleMoodCall() {
+  if (currentMoodVigilActive) {
+    stopMoodCall();
+  } else {
+    startMoodCall('sad');
+  }
+}
+
+function startMoodCall(mood) {
+  playSound('chime');
+  if (!opticalMediaStream) {
+    startOpticalCamera();
+  }
+  sendWS({ type: 'start_mood_call', mood: mood || 'sad' });
+  appendDiagLog("Initiated proactive mood video call check-in.");
+}
+
+function stopMoodCall() {
+  playSound('beep');
+  sendWS({ type: 'stop_mood_call' });
+  appendDiagLog("Mood video call vigil concluded.");
+}
+
+function toggleAutoMoodScan(enabled) {
+  autoMoodScanEnabled = !!enabled;
+  appendDiagLog(`Automated optical mood surveillance: ${autoMoodScanEnabled ? 'ENABLED' : 'PAUSED'}`);
+}
+
+function scanFaceMoodNow() {
+  playSound('click');
+  const btn = document.getElementById('mood-scan-btn-label');
+  if (btn) btn.textContent = 'SCANNING...';
+
+  // Ensure camera is started
+  const video = document.getElementById('optics-video');
+  if (!opticalMediaStream || !video || video.readyState < 2) {
+    startOpticalCamera();
+    setTimeout(() => {
+      captureAndSendMoodFrame();
+    }, 1200);
+    return;
+  }
+  captureAndSendMoodFrame();
+}
+
+function captureAndSendMoodFrame() {
+  try {
+    const video = document.getElementById('optics-video');
+    if (!video) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = 480;
+    canvas.height = 360;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    const b64 = dataUrl.split(',')[1];
+
+    sendWS({
+      type: 'analyze_mood_frame',
+      image: b64
+    });
+    appendDiagLog("Optical facial mood frame dispatched for biometric decoding.");
+  } catch (err) {
+    console.warn("Mood frame capture notice:", err);
+  } finally {
+    const btn = document.getElementById('mood-scan-btn-label');
+    if (btn) btn.textContent = '📸 SCAN FACE NOW';
+  }
+}
+
+function renderFaceMoodTelemetry(data) {
+  if (!data) return;
+  const mood = (data.mood || 'calm').toLowerCase();
+  const label = data.mood_label || mood.toUpperCase();
+  const valence = (data.valence !== undefined) ? Number(data.valence) : 0.0;
+  const conf = Math.round((data.confidence || 0.85) * 100);
+  const cues = data.facial_cues || [];
+
+  // 1. Viewport Face Target Overlay
+  const target = document.getElementById('optics-face-target');
+  const badge = document.getElementById('optics-face-badge');
+  if (target && badge) {
+    target.style.display = 'block';
+    target.style.top = '15%';
+    target.style.left = '20%';
+    target.style.width = '60%';
+    target.style.height = '68%';
+
+    let themeCol = 'var(--cyan)';
+    let moodEmoji = '😐';
+    if (mood === 'sad' || mood === 'melancholic') { themeCol = '#ff6b6b'; moodEmoji = '😟'; }
+    else if (mood === 'happy') { themeCol = '#00ff88'; moodEmoji = '😊'; }
+    else if (mood === 'angry') { themeCol = '#ff2840'; moodEmoji = '😠'; }
+    else if (mood === 'numb' || mood === 'fatigued') { themeCol = '#ffaa00'; moodEmoji = '😐'; }
+    else if (mood === 'stressed' || mood === 'anxious') { themeCol = '#ff9900'; moodEmoji = '😰'; }
+
+    target.style.borderColor = themeCol;
+    target.style.boxShadow = `0 0 16px ${themeCol}`;
+    badge.style.borderColor = themeCol;
+    badge.style.color = themeCol;
+    badge.innerHTML = `${moodEmoji} <strong>${escapeHtml(label)}</strong> (${conf}%)`;
+  }
+
+  // 2. Drawer Elements
+  const nameEl = document.getElementById('mood-drawer-name');
+  const valBadge = document.getElementById('mood-valence-badge');
+  const valBar = document.getElementById('mood-valence-bar');
+  const confTag = document.getElementById('mood-confidence-tag');
+  const cuesText = document.getElementById('mood-cues-text');
+
+  if (nameEl) nameEl.textContent = label;
+  if (valBadge) {
+    valBadge.textContent = `VALENCE: ${valence > 0 ? '+' : ''}${valence.toFixed(2)}`;
+    valBadge.style.color = valence < -0.2 ? '#ff6b6b' : (valence > 0.3 ? 'var(--emerald)' : 'var(--amber)');
+  }
+  if (valBar) {
+    const pct = Math.max(5, Math.min(100, Math.round(((valence + 1.0) / 2.0) * 100)));
+    valBar.style.width = `${pct}%`;
+  }
+  if (confTag) confTag.textContent = `CONF: ${conf}%`;
+  if (cuesText) cuesText.textContent = cues.length > 0 ? cues.join(', ') : 'Stable facial baseline';
+
+  // 3. Append to Session Mood History Log
+  const logContainer = document.getElementById('mood-telemetry-log');
+  const countBadge = document.getElementById('mood-log-count');
+  sessionMoodHistory.unshift({
+    time: data.timestamp || new Date().toLocaleTimeString(),
+    label: label,
+    valence: valence,
+    mood: mood
+  });
+  if (sessionMoodHistory.length > 30) sessionMoodHistory.pop();
+
+  if (countBadge) countBadge.textContent = `${sessionMoodHistory.length} RECORDS`;
+  if (logContainer) {
+    logContainer.innerHTML = sessionMoodHistory.map(item => `
+      <div style="display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+        <span>[${escapeHtml(item.time)}] ${escapeHtml(item.label)}</span>
+        <span style="color: ${item.valence < -0.2 ? '#ff6b6b' : (item.valence > 0.3 ? 'var(--emerald)' : 'var(--amber)')}; font-family: var(--font-mono);">
+          ${item.valence > 0 ? '+' : ''}${item.valence.toFixed(2)}
+        </span>
+      </div>
+    `).join('');
+  }
+}
+
+function renderMoodVigilStatus(data) {
+  if (!data) return;
+  currentMoodVigilActive = !!data.is_active;
+
+  // Header Button
+  const hudBtn = document.getElementById('mood-hud-btn');
+  if (hudBtn) {
+    if (currentMoodVigilActive) {
+      hudBtn.textContent = '❤️ CALL: ACTIVE';
+      hudBtn.style.borderColor = 'var(--amber)';
+      hudBtn.style.color = '#ffbb44';
+      hudBtn.style.boxShadow = '0 0 10px rgba(255, 170, 0, 0.4)';
+    } else {
+      hudBtn.textContent = '❤️ MOOD';
+      hudBtn.style.borderColor = '';
+      hudBtn.style.color = '';
+      hudBtn.style.boxShadow = '';
+    }
+  }
+
+  // Optics Toolbar Call Button
+  const optMoodBtn = document.getElementById('optics-mood-btn');
+  if (optMoodBtn) {
+    optMoodBtn.textContent = currentMoodVigilActive ? '❤️ END CALL' : '❤️ MOOD CALL';
+    optMoodBtn.style.borderColor = currentMoodVigilActive ? 'var(--crimson)' : '';
+    optMoodBtn.style.color = currentMoodVigilActive ? '#ff6b6b' : '';
+  }
+
+  // Floating HUD Banner
+  const banner = document.getElementById('mood-vigil-banner');
+  const bannerState = document.getElementById('mood-banner-state');
+  const bannerEmotion = document.getElementById('mood-banner-emotion-badge');
+  const bannerTimer = document.getElementById('mood-banner-timer');
+  const quickReplies = document.getElementById('mood-quick-replies');
+
+  if (banner) {
+    if (currentMoodVigilActive) {
+      banner.classList.add('active');
+    } else {
+      banner.classList.remove('active');
+    }
+  }
+
+  if (bannerState) {
+    bannerState.textContent = data.awaiting_reply ? `AWAITING SIR'S RESPONSE (PING ${data.ping_count || 1}/3)` : 'ATTENTIVE LISTENING';
+    bannerState.style.color = data.awaiting_reply ? 'var(--amber)' : 'var(--emerald)';
+  }
+  if (bannerEmotion) {
+    bannerEmotion.textContent = data.mood_label || (data.current_mood ? data.current_mood.toUpperCase() : 'MELANCHOLIC');
+  }
+  if (bannerTimer) {
+    if (data.awaiting_reply && data.time_to_next_ping_seconds > 0) {
+      bannerTimer.textContent = `NEXT PING: ${data.time_to_next_ping_seconds}s`;
+    } else if (!data.awaiting_reply) {
+      bannerTimer.textContent = 'CONNECTED';
+    } else {
+      bannerTimer.textContent = `PING ${data.ping_count}/3 SENT`;
+    }
+  }
+
+  // Show Quick Reply Chips during Vigil
+  if (quickReplies) {
+    quickReplies.style.display = currentMoodVigilActive ? 'flex' : 'none';
+  }
+
+  // Drawer Elements
+  const statusBadge = document.getElementById('mood-drawer-status-badge');
+  const vigilBadge = document.getElementById('vigil-state-badge');
+  const pingCountEl = document.getElementById('vigil-ping-count');
+  const vigilTimerEl = document.getElementById('vigil-timer-countdown');
+  const lastPingEl = document.getElementById('vigil-last-ping');
+  const toggleCallBtn = document.getElementById('mood-call-toggle-btn');
+
+  if (statusBadge) {
+    statusBadge.textContent = currentMoodVigilActive ? 'CALL ACTIVE // VIGIL' : 'STANDBY';
+    statusBadge.style.color = currentMoodVigilActive ? 'var(--amber)' : 'var(--cyan)';
+  }
+  if (vigilBadge) {
+    vigilBadge.textContent = data.comfort_mode || (data.awaiting_reply ? 'INSISTING...' : 'LISTENING');
+    vigilBadge.style.color = data.awaiting_reply ? 'var(--amber)' : 'var(--emerald)';
+  }
+  if (pingCountEl) pingCountEl.textContent = `${data.ping_count || 0} / ${data.max_pings || 3}`;
+  if (vigilTimerEl) vigilTimerEl.textContent = data.awaiting_reply ? `${data.time_to_next_ping_seconds || 0}s` : 'SIR RESPONDED';
+  if (lastPingEl) lastPingEl.textContent = data.last_ping_text || 'None dispatched.';
+  if (toggleCallBtn) {
+    toggleCallBtn.textContent = currentMoodVigilActive ? '✕ END VIDEO CALL' : '📹 START VIDEO CALL';
+    toggleCallBtn.style.background = currentMoodVigilActive ? 'rgba(255, 62, 62, 0.25)' : 'rgba(255, 170, 0, 0.2)';
+    toggleCallBtn.style.borderColor = currentMoodVigilActive ? 'var(--crimson)' : 'var(--amber)';
+  }
+}
+
+function quickReplyToMood(text) {
+  playSound('beep');
+  const input = document.getElementById('chat-input');
+  const form = document.getElementById('chat-form');
+  if (input && form) {
+    input.value = text;
+    form.dispatchEvent(new Event('submit'));
+  }
+}
+
+function triggerComfortProtocol(action, notes) {
+  playSound('chime');
+  sendWS({
+    type: 'task',
+    text: `Execute comfort protocol: ${action}. ${notes || ''}`
+  });
+  appendDiagLog(`Comfort protocol initiated: ${action}`);
+}
+
+function handleComfortProtocolEvent(msg) {
+  appendDiagLog(`❤️ Comfort Protocol Active: [${(msg.action || 'GENERAL').toUpperCase()}] ${msg.notes || ''}`);
+  if (msg.action === 'acoustic_relax') {
+    playComfortHarmonics();
+  }
+}
+
+function playComfortHarmonics() {
+  if (!sfxEnabled) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const chords = [261.63, 329.63, 392.00, 523.25]; // C Major relaxing harmonic
+    chords.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.15);
+      gain.gain.setValueAtTime(0.04, ctx.currentTime + idx * 0.15);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 3.0);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + idx * 0.15);
+      osc.stop(ctx.currentTime + 3.0);
+    });
+  } catch (e) {
+    console.warn("Harmonics notice:", e);
+  }
+}
+
+// Background auto-scan interval
+setInterval(() => {
+  if (autoMoodScanEnabled && opticalMediaStream && !isSpeechRecognizing && !isRecording) {
+    const video = document.getElementById('optics-video');
+    if (video && video.readyState >= 2 && video.style.display !== 'none') {
+      captureAndSendMoodFrame();
+    }
+  }
+}, 12000);
 
 function restoreChatHistory(messages) {
   if (!messages || messages.length === 0) return;

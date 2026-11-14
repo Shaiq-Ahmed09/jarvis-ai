@@ -83,6 +83,7 @@ from core.self_patcher import get_code_self_patcher
 from core.voice_clone import get_voice_biometrics
 from core.audio_cache import clear_audio_cache
 from core.focus_mode import get_focus_guardian
+from core.mood_analyzer import get_mood_analyzer, get_mood_vigil
 
 # Active WebSocket session registry for proactive broadcasting
 ACTIVE_SESSIONS = set()
@@ -280,6 +281,16 @@ TOOLS = [
           "duration_minutes": {"type": "integer", "description": "Session duration in minutes (e.g. 25, 45, 60, 90). Omit for open-ended focus."}},
          ["enabled"]),
     tool("get_focus_mode_status", "Retrieve real-time telemetry of the Study Focus Mode envelope, including remaining session time, active objective, and number of deflected game launch attempts."),
+    tool("analyze_facial_mood", "Analyze Sir's facial expression, emotional valence, and micro-expressions from the live optical camera feed or current visual snapshot. Detects if Sir is sad, happy, angry, numb, exhausted, stressed, or calm, and recommends proactive comfort actions.",
+         {"frame_base64": {"type": "string", "description": "Optional JPEG base64 frame. If omitted, uses the latest optical camera frame from the viewport."}}),
+    tool("start_mood_call", "Initiate an interactive Proactive Mood Video Call / Empathic Vigil: projects the optical camera feed into the HUD, evaluates Sir's emotional well-being, speaks an initial empathetic check-in first without waiting for Sir, and arms the persistent follow-up timer (double-texting and triple-texting if Sir is silent).",
+         {"objective": {"type": "string", "description": "Purpose of the mood check-in (e.g. 'Comforting Sir after a rough day', 'Energy & stress evaluation')."},
+          "mood_override": {"type": "string", "description": "Optional mood to focus on: 'sad', 'numb', 'angry', 'stressed', 'happy'."}}),
+    tool("stop_mood_call", "Disengage the active Proactive Mood Video Call vigil and restore standard workstation standby mode."),
+    tool("trigger_comfort_protocol", "Execute tailored comfort protocols when Sir is feeling down, melancholic, or exhausted: 'acoustic_relax' (ambient soothing acoustics), 'tea_break' (warm beverage & rest reminder), 'dim_lighting' (soften HUD visual glare), 'empathic_venting' (attentive active listening).",
+         {"action": {"type": "string", "enum": ["acoustic_relax", "tea_break", "dim_lighting", "empathic_venting"], "description": "Comfort action to execute."},
+          "comfort_notes": {"type": "string", "description": "Personalized compassionate notes for Sir."}},
+         ["action"]),
 ]
 
 def get_telemetry():
@@ -415,6 +426,14 @@ COMMUNICATION & APP INTEGRATIONS:
   * You possess an active Focus Mode guardian ('core/focus_mode.py') to lock in on study, exams, or deep work.
   * When Focus Mode is engaged, you actively monitor the desktop to block, minimize, or close games (Steam, Riot, Epic Games, Valorant, Roblox, Minecraft, etc.) and deflect distracting entertainment apps.
   * Use 'toggle_focus_mode(enabled=True, objective="...", duration_minutes=...)' to activate or deactivate, and 'get_focus_mode_status' to check telemetry.
+- FACIAL MOOD ANALYZER & PROACTIVE COMFORT VIGIL (VIDEO CALL COMPANION):
+  * You feature real-time optical facial mood scanning ('core/mood_analyzer.py').
+  * When Sir asks to check his mood, analyze his face, or start a video call check-in, or when optical sensors detect Sir looking sad, down, tired, numb, or angry:
+    - You initiate contact first without waiting for Sir to message!
+    - You ask with genuine warmth and Bettany cadence about his day, how he is feeling, and what happened.
+    - If Sir does not reply promptly, you persistently follow up (double-texting at ~25s, triple-texting at ~50s) to ensure Sir does not bottle things up in silence.
+    - You provide comforting reassurance and execute comfort protocols ('trigger_comfort_protocol').
+    - Use 'analyze_facial_mood', 'start_mood_call', 'stop_mood_call', and 'trigger_comfort_protocol'.
 - ANTIGRAVITY EVOLUTION DIRECTIVES:
   * When Sir asks to improve the project, generate prompts/commands for Antigravity, or evolve J.A.R.V.I.S., call 'generate_antigravity_prompt'.
   * Explain the architectural benefits of each enhancement in your response, highlighting that 1-click Antigravity prompt cards have been generated in his HUD.
@@ -457,10 +476,16 @@ def is_deterministic_fast_path(name: str, args: dict) -> bool:
         return True
     if name == "toggle_focus_mode":
         return True
+    if name in ["stop_mood_call", "trigger_comfort_protocol"]:
+        return True
     return False
 
 def get_fast_ack_phrase(name: str, args: dict) -> str:
     """Return instant acknowledgment phrase from pre-warmed audio cache (0ms synthesis)."""
+    if name == "stop_mood_call":
+        return "Mood video call disengaged, Sir. I remain standing by."
+    if name == "trigger_comfort_protocol":
+        return "I am right here with you, Sir. Take a slow breath."
     if name == "toggle_focus_mode":
         if args.get("enabled", True):
             return "Focus mode engaged, Sir. All gaming and entertainment distractions are now blocked."
@@ -514,6 +539,16 @@ def extract_action_intent(text: str):
         return ("toggle_focus_mode", {"enabled": True, "objective": "Study & Deep Work", "duration_minutes": 30})
     if any(k in t for k in ["stop focus mode", "exit focus mode", "disable focus mode", "turn off focus mode", "end focus mode", "leave focus mode", "cancel focus mode"]):
         return ("toggle_focus_mode", {"enabled": False})
+
+    # Proactive Mood & Face Scanning Intent
+    if any(k in t for k in ["scan my face", "scan face", "check my mood", "analyze my mood", "how do i look", "facial mood", "detect my mood", "check my face", "mood check"]):
+        return ("analyze_facial_mood", {})
+    if any(k in t for k in ["start mood call", "video call me", "mood video call", "talk to me jarvis", "check in on me", "start video call", "open mood call"]):
+        return ("start_mood_call", {"objective": "Proactive Empathic Video Call & Check-In"})
+    if any(k in t for k in ["stop mood call", "end mood call", "close mood call", "hang up", "end call", "dismiss mood call"]):
+        return ("stop_mood_call", {})
+    if any(k in t for k in ["i am feeling down", "i feel sad", "had a rough day", "bad day today", "i feel exhausted", "comfort me", "im sad", "i am sad"]):
+        return ("trigger_comfort_protocol", {"action": "empathic_venting", "comfort_notes": "Sir expressed feeling down."})
 
     if t in ["maximize", "maximize window", "maximize screen"]:
         return ("manage_window", {"action": "maximize"})
@@ -1633,6 +1668,74 @@ class JarvisSession:
             await self.send(type="focus_mode_status", **status)
             return f"Focus Mode status: {'ACTIVE' if status['is_active'] else 'STANDBY'}, objective '{status['objective']}', {status['remaining_formatted']} remaining, {status['blocked_attempts']} distractions deflected."
 
+        if name == "analyze_facial_mood":
+            img_b64 = args.get("frame_base64") or self.last_camera_frame
+            analyzer = get_mood_analyzer()
+            if img_b64:
+                img_bytes = base64.b64decode(img_b64)
+            else:
+                # Capture current desktop or fallback neutral frame
+                from PIL import Image
+                import io
+                buf = io.BytesIO()
+                Image.new("RGB", (320, 240), color=(45, 52, 64)).save(buf, format="JPEG")
+                img_bytes = buf.getvalue()
+
+            res = await analyzer.analyze_face_frame(img_bytes, interaction_context="Sir requested facial mood analysis")
+            await self.send(type="face_mood_telemetry", **res)
+
+            # If distress detected and vigil not yet active, trigger proactive check-in automatically!
+            if res.get("proactive_trigger") and not get_mood_vigil().is_active:
+                vigil = get_mood_vigil()
+                st = vigil.start_vigil(
+                    mood=res.get("mood", "sad"),
+                    mood_label=res.get("mood_label", "MELANCHOLIC"),
+                    initial_phrase=res.get("initial_check_in"),
+                    facial_cues=res.get("facial_cues")
+                )
+                await self.send(type="mood_vigil_status", **st)
+                await self.send(type="camera_stream", action="start")
+
+            cues_str = ", ".join(res.get("facial_cues", [])) or "Nominal expression"
+            return (
+                f"Facial Biometric Analysis: Mood '{res.get('mood_label', 'CALM')}', "
+                f"Valence {res.get('valence', 0.0)}, Arousal {res.get('arousal', 0.0)}. "
+                f"Observed cues: {cues_str}. Comfort needed: {res.get('needs_comfort', False)}."
+            )
+
+        if name == "start_mood_call":
+            vigil = get_mood_vigil()
+            mood = args.get("mood_override", "sad")
+            obj = args.get("objective", "Proactive Empathic Video Call")
+            await self.send(type="camera_stream", action="start")
+            st = vigil.start_vigil(mood=mood)
+            await self.send(type="mood_vigil_status", **st)
+            asyncio.create_task(self.send_vocal_response(vigil.last_ping_text))
+            await self.send(type="say_text", text=vigil.last_ping_text)
+            return f"Proactive mood video call engaged, Sir. Optical viewport active and check-in initiated: \"{vigil.last_ping_text}\""
+
+        if name == "stop_mood_call":
+            vigil = get_mood_vigil()
+            st = vigil.stop_vigil()
+            await self.send(type="mood_vigil_status", **st)
+            return "Proactive mood video call concluded, Sir. Standing by on workstation feed."
+
+        if name == "trigger_comfort_protocol":
+            act = args.get("action", "acoustic_relax")
+            notes = args.get("comfort_notes", "I am right here with you, Sir.")
+            vigil = get_mood_vigil()
+            vigil.comfort_mode = act
+            await self.send(type="comfort_protocol_event", action=act, notes=notes)
+            await self.send(type="mood_vigil_status", **vigil.get_status())
+            if act == "acoustic_relax":
+                await self.send(type="log", text="Comfort Protocol: Calming acoustic resonance matrix initialized.")
+                return f"Comfort protocol 'acoustic_relax' activated for Sir: {notes}"
+            elif act == "tea_break":
+                return f"Comfort protocol 'tea_break' activated: Rest reminder and warm hydration protocol dispatched to Sir."
+            elif act == "dim_lighting":
+                return f"Comfort protocol 'dim_lighting' activated: HUD optical glare softened for Sir."
+            return f"Comfort protocol 'empathic_venting' engaged: J.A.R.V.I.S. attentive and ready to listen."
+
         return "Unknown command requested."
 
     async def turn(self, user_text: str):
@@ -1649,6 +1752,15 @@ class JarvisSession:
             await self.send(type="biometric_telemetry", metrics=current_bio)
         except Exception as e:
             print(f"Biometrics tracking notice: {e}")
+
+        # Check active mood vigil response
+        try:
+            vigil = get_mood_vigil()
+            if vigil.is_active and vigil.awaiting_reply:
+                vigil.record_user_reply(user_text)
+                await self.send(type="mood_vigil_status", **vigil.get_status())
+        except Exception as e:
+            print(f"Mood vigil response notice: {e}")
 
         # ⚡ 0ms Fast-Path Execution Bypass for routine deterministic commands
         fast_action = extract_action_intent(user_text)
@@ -1912,6 +2024,17 @@ async def websocket_handler(ws: WebSocket):
                                 app_name = blk.get("title") or blk.get("name") or "Gaming Application"
                                 await session.send_vocal_response(f"Focus mode is currently active for your {guardian.objective}, Sir. I have closed {app_name}. Stay on target.")
                     await session.send(type="focus_mode_status", **guardian.get_status())
+
+                    # Check proactive mood video call follow-up insistence timer
+                    vigil = get_mood_vigil()
+                    if vigil.is_active:
+                        follow_up = vigil.check_follow_up_timer()
+                        if follow_up:
+                            ping_num = follow_up.get("ping_number", 2)
+                            await session.send(type="say_text", text=follow_up["text"])
+                            asyncio.create_task(session.send_vocal_response(follow_up["speech"]))
+                            await session.send(type="log", text=f"💬 Proactive Video Call Follow-up (Ping {ping_num}): {follow_up['text']}")
+                    await session.send(type="mood_vigil_status", **vigil.get_status())
                 except Exception:
                     pass
                 await asyncio.sleep(2.5)
@@ -1931,6 +2054,7 @@ async def websocket_handler(ws: WebSocket):
     vb = get_voice_biometrics()
     await session.send(type="voice_profiles_data", profiles=vb.list_profiles(), active_id=vb.active_profile_id)
     await session.send(type="focus_mode_status", **get_focus_guardian().get_status())
+    await session.send(type="mood_vigil_status", **get_mood_vigil().get_status())
     
     # Restore persistent chat history across page refresh from SQLite cortex
     try:
@@ -2076,6 +2200,50 @@ async def websocket_handler(ws: WebSocket):
 
             elif msg_type == "get_focus_mode":
                 await session.send(type="focus_mode_status", **get_focus_guardian().get_status())
+
+            elif msg_type == "start_mood_call":
+                vigil = get_mood_vigil()
+                mood = data.get("mood", "sad")
+                phrase = data.get("phrase")
+                await session.send(type="camera_stream", action="start")
+                st = vigil.start_vigil(mood=mood, initial_phrase=phrase)
+                await session.send(type="say_text", text=vigil.last_ping_text)
+                asyncio.create_task(session.send_vocal_response(vigil.last_ping_text))
+                await session.send(type="mood_vigil_status", **st)
+
+            elif msg_type == "stop_mood_call":
+                vigil = get_mood_vigil()
+                st = vigil.stop_vigil()
+                asyncio.create_task(session.send_vocal_response("Mood vigil disengaged, Sir. Standing by on workstation feed."))
+                await session.send(type="mood_vigil_status", **st)
+
+            elif msg_type == "analyze_mood_frame":
+                img_b64 = data.get("image")
+                if img_b64:
+                    session.last_camera_frame = img_b64
+                    try:
+                        img_bytes = base64.b64decode(img_b64)
+                        analyzer = get_mood_analyzer()
+                        res = await analyzer.analyze_face_frame(img_bytes, interaction_context="Client optical video stream")
+                        await session.send(type="face_mood_telemetry", **res)
+                        
+                        # Auto-trigger proactive check-in if distress detected and vigil not already active
+                        if res.get("proactive_trigger") and not get_mood_vigil().is_active:
+                            vigil = get_mood_vigil()
+                            st = vigil.start_vigil(
+                                mood=res.get("mood", "sad"),
+                                mood_label=res.get("mood_label", "MELANCHOLIC"),
+                                initial_phrase=res.get("initial_check_in"),
+                                facial_cues=res.get("facial_cues")
+                            )
+                            await session.send(type="say_text", text=vigil.last_ping_text)
+                            asyncio.create_task(session.send_vocal_response(vigil.last_ping_text))
+                            await session.send(type="mood_vigil_status", **st)
+                    except Exception as err:
+                        print(f"Frame analysis error: {err}")
+
+            elif msg_type == "get_mood_status":
+                await session.send(type="mood_vigil_status", **get_mood_vigil().get_status())
 
             elif msg_type == "approve":
                 aid = data.get("id")
