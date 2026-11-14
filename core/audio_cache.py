@@ -33,10 +33,24 @@ COMMON_PHRASES = [
     "Application launched, Sir."
 ]
 
-async def synthesize_raw(text: str, voice: str = DEFAULT_VOICE) -> str:
-    """Direct Edge-TTS synthesis returning base64 MP3."""
+async def synthesize_raw(text: str, voice: str = None) -> str:
+    """Direct Edge-TTS synthesis returning base64 MP3 using active vocal biometric profile."""
     try:
-        communicate = edge_tts.Communicate(text, voice, pitch=VOICE_PITCH, rate=VOICE_RATE)
+        from core.voice_clone import get_voice_biometrics
+        vb = get_voice_biometrics()
+        active_prof = vb.get_active_profile()
+        target_voice = voice or active_prof.get("neural_voice", DEFAULT_VOICE)
+        target_pitch = active_prof.get("pitch", VOICE_PITCH)
+        target_rate = active_prof.get("rate", VOICE_RATE)
+        target_volume = active_prof.get("volume", "+0%")
+
+        communicate = edge_tts.Communicate(
+            text,
+            target_voice,
+            pitch=target_pitch,
+            rate=target_rate,
+            volume=target_volume
+        )
         audio_bytes = b""
         async for chunk in communicate.stream():
             if chunk["type"] == "audio":
@@ -47,6 +61,11 @@ async def synthesize_raw(text: str, voice: str = DEFAULT_VOICE) -> str:
     except Exception as e:
         print(f"Edge-TTS synthesis error: {e}")
         return ""
+
+def clear_audio_cache():
+    """Purge in-memory audio cache so next synthesis uses updated voice profile."""
+    global _AUDIO_CACHE
+    _AUDIO_CACHE.clear()
 
 async def get_or_synthesize_audio(text: str, voice: str = DEFAULT_VOICE) -> str:
     """Return cached base64 audio if available (0ms), otherwise synthesize and cache."""

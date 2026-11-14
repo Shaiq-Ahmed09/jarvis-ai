@@ -1372,6 +1372,90 @@ body {
   padding-top: 4px;
 }
 
+/* Quantum P2P, Self-Patch, & Voice Studio Drawers */
+#p2p-drawer, #self-patch-drawer, #voice-studio-drawer {
+  position: fixed;
+  top: 0;
+  right: -560px;
+  width: 530px;
+  height: 100vh;
+  background: rgba(2, 8, 16, 0.96);
+  backdrop-filter: blur(18px);
+  border-left: 1px solid var(--cyan);
+  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.85);
+  z-index: 1000;
+  transition: right 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+}
+#p2p-drawer.open, #self-patch-drawer.open, #voice-studio-drawer.open { right: 0; }
+
+.drawer-body-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stark-card {
+  background: rgba(0, 240, 255, 0.04);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 4px;
+  padding: 12px;
+}
+.stark-card-header {
+  font-family: var(--font-hud);
+  font-size: 11px;
+  color: var(--cyan);
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.p2p-peer-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  background: rgba(2, 12, 24, 0.6);
+  border: 1px solid rgba(0, 240, 255, 0.15);
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+
+.voice-profile-card {
+  background: rgba(2, 12, 24, 0.7);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 8px;
+  transition: all 0.2s ease;
+}
+.voice-profile-card.active {
+  border-color: var(--cyan);
+  background: rgba(0, 240, 255, 0.08);
+  box-shadow: 0 0 14px rgba(0, 240, 255, 0.15);
+}
+
+.diag-table {
+  width: 100%;
+  font-size: 11px;
+  border-collapse: collapse;
+}
+.diag-table th, .diag-table td {
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px solid rgba(0, 240, 255, 0.1);
+}
+.diag-table th {
+  color: var(--dim);
+  font-family: var(--font-hud);
+}
+
 /* Optics Toolbar & Interactive Reticle */
 .optics-toolbar {
   display: flex;
@@ -1630,6 +1714,9 @@ body {
   <div class="hud-header">
     <span>J.A.R.V.I.S. // FULL HANDS-ON PC INTERFACE</span>
     <div style="display: flex; align-items: center; gap: 6px;">
+      <button class="stark-btn mini" onclick="openP2PDrawer()" title="Quantum-Grade Encrypted P2P Communications Mesh">🔐 P2P</button>
+      <button class="stark-btn mini" onclick="openSelfPatchDrawer()" title="Autonomous Code Self-Patching Runtime">🧬 PATCH</button>
+      <button class="stark-btn mini" onclick="openVoiceStudioDrawer()" title="Biometric Voice Clone & Vocal Studio">🎙️ VOICE</button>
       <button class="stark-btn mini" onclick="openArDrawer()" title="Holographic 2.5D AR Window Radar Matrix">🪟 AR WINDOWS</button>
       <button class="stark-btn mini" onclick="promptSwarmDispatch()" title="Autonomous Multi-Agent Swarm Orchestrator">🚀 SWARM</button>
       <button class="stark-btn mini" id="sfx-toggle-btn" onclick="toggleSFX()" title="Synthesized Cybernetic Sound FX">🔊 SFX: ON</button>
@@ -1866,6 +1953,188 @@ body {
   </div>
   <div class="ar-window-list" id="ar-window-list">
     <!-- Populated dynamically via renderArWindows() -->
+  </div>
+</div>
+
+<!-- Slide-out Quantum-Grade Encrypted P2P Communications Mesh Drawer -->
+<div id="p2p-drawer">
+  <div class="ar-header">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span style="color: var(--cyan); font-weight: bold;">🔐 QUANTUM P2P MESH</span>
+      <span class="cortex-badge" id="p2p-node-badge" style="background: rgba(0, 240, 255, 0.2); color: var(--cyan);">STARK-ALPHA-PRIME</span>
+    </div>
+    <div style="display: flex; gap: 8px; align-items: center;">
+      <button class="stark-btn mini" onclick="refreshP2PMesh()">🔄 SYNC</button>
+      <button class="drawer-close" onclick="closeP2PDrawer()" title="Close P2P Drawer">&times;</button>
+    </div>
+  </div>
+  <div class="drawer-body-scroll">
+    <div class="stark-card">
+      <div class="stark-card-header">
+        <span>CRYPTOGRAPHIC SUITE & TELEMETRY</span>
+        <span class="cortex-badge" id="p2p-entropy-val" style="background: rgba(0, 255, 136, 0.2); color: var(--emerald);">99.98% PURE</span>
+      </div>
+      <div style="font-size: 11px; color: var(--dim); line-height: 1.4; margin-bottom: 6px;">
+        <div>CIPHER: <strong style="color: var(--cyan);">KYBER-1024-HYBRID // AES-256-GCM</strong></div>
+        <div>ACTIVE PEERS: <strong id="p2p-peers-online" style="color: var(--emerald);">3 ONLINE</strong></div>
+        <div>AVG LATENCY: <strong id="p2p-avg-latency" style="color: var(--amber);">16.2 ms</strong></div>
+      </div>
+    </div>
+
+    <div class="stark-card">
+      <div class="stark-card-header">
+        <span>ENROLLED MESH NODES</span>
+        <button class="stark-btn mini" onclick="promptPairP2PNode()">+ ENROLL NODE</button>
+      </div>
+      <div id="p2p-peers-list">
+        <!-- Rendered dynamically via renderP2PMeshStatus() -->
+      </div>
+    </div>
+
+    <div class="stark-card">
+      <div class="stark-card-header">
+        <span>TRANSMIT ENCRYPTED QUANTUM PACKET</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <select id="p2p-target-peer" class="hud-input" style="font-size: 11px; padding: 6px;">
+          <option value="NODE-MARK-VII-SATELLITE">NODE-MARK-VII-SATELLITE (Orbital)</option>
+          <option value="NODE-RADON-MOBILE">NODE-RADON-MOBILE (Sir's Uplink)</option>
+          <option value="NODE-SENTINEL-CLUSTER">NODE-SENTINEL-CLUSTER (Relay)</option>
+        </select>
+        <input type="text" id="p2p-msg-input" class="hud-input" placeholder="Confidential payload to encrypt and dispatch..." style="font-size: 11px; padding: 6px;" onkeydown="if(event.key==='Enter')sendP2PPacket()">
+        <button class="stark-btn" onclick="sendP2PPacket()" style="padding: 6px 12px; font-size: 11px;">⚡ ENCRYPT & DISPATCH PACKET</button>
+      </div>
+    </div>
+
+    <div class="stark-card">
+      <div class="stark-card-header">
+        <span>RECENT TRANSMISSIONS</span>
+      </div>
+      <div id="p2p-tx-log" style="font-size: 10px; font-family: var(--font-mono); color: var(--dim); display: flex; flex-direction: column; gap: 4px;">
+        <div>Standby. Quantum authenticated channel active.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Slide-out Autonomous Code Self-Patching Runtime Drawer -->
+<div id="self-patch-drawer">
+  <div class="ar-header">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span style="color: var(--cyan); font-weight: bold;">🧬 CODE SELF-PATCH RUNTIME</span>
+      <span class="cortex-badge" id="patch-health-badge" style="background: rgba(0, 255, 136, 0.2); color: var(--emerald);">100% HEALTHY</span>
+    </div>
+    <div style="display: flex; gap: 8px; align-items: center;">
+      <button class="stark-btn mini" onclick="refreshCodeDiagnostics()">🔄 SCAN</button>
+      <button class="drawer-close" onclick="closeSelfPatchDrawer()" title="Close Self-Patch Drawer">&times;</button>
+    </div>
+  </div>
+  <div class="drawer-body-scroll">
+    <div class="stark-card">
+      <div class="stark-card-header">
+        <span>WORKSPACE AST & HEALTH TELEMETRY</span>
+        <span id="patch-loc-badge" style="color: var(--cyan); font-size: 10px; font-family: var(--font-mono);">0 LOC</span>
+      </div>
+      <div class="bar-track" style="height: 4px; margin-bottom: 8px;">
+        <div class="bar-fill" id="patch-health-bar" style="width: 100%; background: var(--emerald);"></div>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--dim);">
+        <span>MODULES CHECKED: <strong id="patch-mod-count" style="color: var(--cyan);">0</strong></span>
+        <span>CLEAN: <strong id="patch-clean-count" style="color: var(--emerald);">0</strong></span>
+        <span>FUNCTIONS INDEXED: <strong id="patch-fn-count" style="color: var(--amber);">0</strong></span>
+      </div>
+    </div>
+
+    <div class="stark-card">
+      <div class="stark-card-header">
+        <span>WORKSPACE MODULE DIAGNOSTICS</span>
+      </div>
+      <div style="max-height: 180px; overflow-y: auto;">
+        <table class="diag-table">
+          <thead>
+            <tr><th>MODULE</th><th>STATUS</th><th>LOC</th><th>FUNCS</th></tr>
+          </thead>
+          <tbody id="patch-diag-tbody">
+            <!-- Populated via renderCodeDiagnostics() -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="stark-card">
+      <div class="stark-card-header">
+        <span>SURGICAL PATCH COMPOSER</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <input type="text" id="patch-file-input" class="hud-input" placeholder="Relative file path (e.g. server.py)" value="server.py" style="font-size: 11px; padding: 6px;">
+        <textarea id="patch-target-text" class="hud-input" placeholder="Target code block to replace (exact match)..." rows="3" style="font-size: 10px; font-family: var(--font-mono); resize: vertical;"></textarea>
+        <textarea id="patch-replace-text" class="hud-input" placeholder="New replacement code block..." rows="3" style="font-size: 10px; font-family: var(--font-mono); resize: vertical;"></textarea>
+        <input type="text" id="patch-reason-text" class="hud-input" placeholder="Motivation / architectural reason..." style="font-size: 11px; padding: 6px;">
+        <div style="display: flex; gap: 6px; justify-content: flex-end; margin-top: 4px;">
+          <button class="stark-btn mini" onclick="submitSelfPatch(true)">🧪 DRY RUN (TEST AST)</button>
+          <button class="stark-btn mini" onclick="submitSelfPatch(false)" style="background: rgba(0, 255, 136, 0.2); border-color: var(--emerald);">🚀 APPLY VERIFIED PATCH</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="stark-card">
+      <div class="stark-card-header">
+        <span>ROLLBACK SAFETY & SNAPSHOTS</span>
+        <button class="stark-btn mini" onclick="rollbackSelfPatch()" style="color: var(--amber);">↩️ ROLLBACK LATEST</button>
+      </div>
+      <div id="patch-snapshot-list" style="font-size: 10px; font-family: var(--font-mono); color: var(--dim);">
+        Snapshots are automatically created prior to every patch write.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Slide-out Biometric Voice Clone Studio Drawer -->
+<div id="voice-studio-drawer">
+  <div class="ar-header">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span style="color: var(--cyan); font-weight: bold;">🎙️ BIOMETRIC VOICE STUDIO</span>
+      <span class="cortex-badge" id="voice-active-badge" style="background: rgba(0, 240, 255, 0.2); color: var(--cyan);">J.A.R.V.I.S. PRIME</span>
+    </div>
+    <button class="drawer-close" onclick="closeVoiceStudioDrawer()" title="Close Voice Studio">&times;</button>
+  </div>
+  <div class="drawer-body-scroll">
+    <div class="stark-card">
+      <div class="stark-card-header">
+        <span>ACTIVE SYNTHESIS PERSONA</span>
+        <span class="cortex-badge" id="voice-model-badge" style="color: var(--emerald); font-size: 9px;">en-GB-RyanNeural</span>
+      </div>
+      <div style="font-size: 11px; color: var(--dim); line-height: 1.4;">
+        <div>ACTIVE: <strong id="voice-current-name" style="color: var(--cyan);">Stark Mark VII J.A.R.V.I.S.</strong></div>
+        <div>TIMBRE: <span id="voice-current-timbre">Dignified British Baritone (Paul Bettany Cadence)</span></div>
+        <div style="display: flex; gap: 14px; margin-top: 4px;">
+          <span>PITCH: <strong id="voice-current-pitch" style="color: var(--amber);">-4Hz</strong></span>
+          <span>RATE: <strong id="voice-current-rate" style="color: var(--emerald);">+12%</strong></span>
+          <span>F0 FREQ: <strong id="voice-current-f0" style="color: var(--cyan);">118 Hz</strong></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="stark-card">
+      <div class="stark-card-header">
+        <span>AVAILABLE VOCAL BIOMETRIC IDENTITIES</span>
+      </div>
+      <div id="voice-profiles-container">
+        <!-- Rendered dynamically via renderVoiceProfiles() -->
+      </div>
+    </div>
+
+    <div class="stark-card">
+      <div class="stark-card-header">
+        <span>ACOUSTIC SPECTRUM & AUDITION HARMONICS</span>
+      </div>
+      <div style="font-size: 11px; color: var(--dim); margin-bottom: 8px;">
+        Click <strong>AUDITION</strong> on any profile above to synthesize live test harmonics and evaluate formant response.
+      </div>
+      <div id="voice-audition-status" style="font-size: 10px; font-family: var(--font-mono); color: var(--cyan); line-height: 1.4;">
+        Standing by for vocal biometric audition signal...
+      </div>
+    </div>
   </div>
 </div>
 
@@ -3723,6 +3992,14 @@ function handleWSMessage(e) {
     renderArWindows(msg);
   } else if (msg.type === 'swarm_event') {
     renderSwarmEvent(msg);
+  } else if (msg.type === 'p2p_mesh_status') {
+    renderP2PMeshStatus(msg);
+  } else if (msg.type === 'code_diagnostics') {
+    renderCodeDiagnostics(msg);
+  } else if (msg.type === 'voice_profiles_data') {
+    renderVoiceProfiles(msg.profiles, msg.active_id);
+  } else if (msg.type === 'voice_audition_clip') {
+    handleVoiceAuditionClip(msg);
   } else if (msg.type === 'core_mode') {
     const isOffline = (msg.mode === 'offline');
     const toggle = $('#offline-toggle');
@@ -4897,6 +5174,291 @@ function arWindowAction(hwnd, action) {
   sendWS({ type: 'ar_window_action', hwnd: hwnd, action: action });
   appendDiagLog(`🪟 AR Action on HWND ${hwnd}: ${action.toUpperCase()}`);
   setTimeout(refreshArWindows, 350);
+}
+
+// ---------------------------------------------------------------------
+// QUANTUM-GRADE ENCRYPTED P2P COMMS MESH
+// ---------------------------------------------------------------------
+function openP2PDrawer() {
+  playSound('click');
+  const d = document.getElementById('p2p-drawer');
+  if (d) {
+    d.classList.add('open');
+    refreshP2PMesh();
+  }
+}
+
+function closeP2PDrawer() {
+  const d = document.getElementById('p2p-drawer');
+  if (d) d.classList.remove('open');
+}
+
+function refreshP2PMesh() {
+  sendWS({ type: 'get_p2p_mesh' });
+  appendDiagLog("Synchronizing Quantum P2P mesh network topology...");
+}
+
+function renderP2PMeshStatus(data) {
+  if (!data) return;
+  const nodeBadge = document.getElementById('p2p-node-badge');
+  const entropyVal = document.getElementById('p2p-entropy-val');
+  const peersOnline = document.getElementById('p2p-peers-online');
+  const avgLatency = document.getElementById('p2p-avg-latency');
+  const peerList = document.getElementById('p2p-peers-list');
+  const txLog = document.getElementById('p2p-tx-log');
+  const targetPeerSelect = document.getElementById('p2p-target-peer');
+
+  if (nodeBadge && data.local_node_id) nodeBadge.textContent = data.local_node_id;
+  if (entropyVal && data.quantum_entropy_level) entropyVal.textContent = data.quantum_entropy_level;
+  if (peersOnline) peersOnline.textContent = `${data.active_peers_count || 0} ONLINE`;
+  if (avgLatency && data.average_latency_ms) avgLatency.textContent = `${data.average_latency_ms} ms`;
+
+  if (peerList && data.peers) {
+    peerList.innerHTML = '';
+    data.peers.forEach(p => {
+      const el = document.createElement('div');
+      el.className = 'p2p-peer-item';
+      el.innerHTML = `
+        <div>
+          <div style="font-weight: bold; color: var(--cyan); font-size: 11px;">${escapeHtml(p.name || p.node_id)}</div>
+          <div style="font-size: 9px; font-family: var(--font-mono); color: var(--dim);">PQC FINGERPRINT: ${escapeHtml(p.fingerprint || 'Q-VERIFIED')}</div>
+        </div>
+        <div style="text-align: right; font-family: var(--font-mono); font-size: 10px;">
+          <span class="cortex-badge" style="background: rgba(0,255,136,0.15); color: var(--emerald);">${p.status}</span>
+          <div style="color: var(--amber); margin-top: 2px;">${p.latency_ms}ms // ${p.signal_fidelity}%</div>
+        </div>
+      `;
+      peerList.appendChild(el);
+    });
+
+    if (targetPeerSelect && data.peers.length > 0) {
+      targetPeerSelect.innerHTML = '';
+      data.peers.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.node_id;
+        opt.textContent = `${p.node_id} (${p.name})`;
+        targetPeerSelect.appendChild(opt);
+      });
+    }
+  }
+
+  if (txLog && data.recent_transmissions) {
+    if (data.recent_transmissions.length === 0) {
+      txLog.innerHTML = '<div>Standing by for authenticated peer transmissions...</div>';
+    } else {
+      txLog.innerHTML = '';
+      data.recent_transmissions.slice(-5).forEach(tx => {
+        const row = document.createElement('div');
+        row.style.borderBottom = '1px solid rgba(0,240,255,0.08)';
+        row.style.padding = '3px 0';
+        row.innerHTML = `<span style="color: var(--cyan);">[${tx.time}]</span> <strong style="color: var(--emerald);">${tx.peer}:</strong> ${tx.status} <span style="color: var(--amber);">(${tx.quantum_sig})</span>`;
+        txLog.appendChild(row);
+      });
+    }
+  }
+}
+
+function sendP2PPacket() {
+  const peerSelect = document.getElementById('p2p-target-peer');
+  const input = document.getElementById('p2p-msg-input');
+  if (!peerSelect || !input) return;
+  const peerId = peerSelect.value;
+  const msg = input.value.trim();
+  if (!msg) return;
+
+  playSound('beep');
+  sendWS({ type: 'send_p2p_packet', peer_id: peerId, message: msg });
+  input.value = '';
+  appendDiagLog(`Transmitted quantum-encrypted packet to ${peerId}`);
+  playSound('chime');
+}
+
+function promptPairP2PNode() {
+  const name = prompt("Enroll New P2P Mesh Node (e.g. 'Tactical Field Tablet', 'Orbital Relay'):");
+  if (name && name.trim()) {
+    sendWS({ type: 'pair_p2p_node', node_name: name.trim() });
+    playSound('chime');
+    appendDiagLog(`Enrolled node '${name.trim()}' into quantum mesh.`);
+  }
+}
+
+// ---------------------------------------------------------------------
+// AUTONOMOUS CODE SELF-PATCHING RUNTIME
+// ---------------------------------------------------------------------
+function openSelfPatchDrawer() {
+  playSound('click');
+  const d = document.getElementById('self-patch-drawer');
+  if (d) {
+    d.classList.add('open');
+    refreshCodeDiagnostics();
+  }
+}
+
+function closeSelfPatchDrawer() {
+  const d = document.getElementById('self-patch-drawer');
+  if (d) d.classList.remove('open');
+}
+
+function refreshCodeDiagnostics() {
+  sendWS({ type: 'get_code_diagnostics' });
+  appendDiagLog("Running workspace AST syntax and self-patch diagnostics...");
+}
+
+function renderCodeDiagnostics(data) {
+  if (!data) return;
+  const healthBadge = document.getElementById('patch-health-badge');
+  const healthBar = document.getElementById('patch-health-bar');
+  const locBadge = document.getElementById('patch-loc-badge');
+  const modCount = document.getElementById('patch-mod-count');
+  const cleanCount = document.getElementById('patch-clean-count');
+  const fnCount = document.getElementById('patch-fn-count');
+  const tbody = document.getElementById('patch-diag-tbody');
+
+  if (healthBadge) {
+    healthBadge.textContent = `${data.health_score}% ${data.overall_status}`;
+    healthBadge.style.color = data.health_score === 100 ? 'var(--emerald)' : 'var(--amber)';
+  }
+  if (healthBar) {
+    healthBar.style.width = `${data.health_score}%`;
+    healthBar.style.background = data.health_score === 100 ? 'var(--emerald)' : 'var(--amber)';
+  }
+  if (locBadge) locBadge.textContent = `${data.total_lines_of_code || 0} LOC`;
+  if (modCount) modCount.textContent = data.checked_modules || 0;
+  if (cleanCount) cleanCount.textContent = data.clean_modules || 0;
+  if (fnCount) fnCount.textContent = data.total_functions_indexed || 0;
+
+  if (tbody && data.module_diagnostics) {
+    tbody.innerHTML = '';
+    data.module_diagnostics.forEach(m => {
+      const tr = document.createElement('tr');
+      const isClean = (m.status === 'NOMINAL');
+      tr.innerHTML = `
+        <td style="color: var(--cyan); font-family: var(--font-mono);">${escapeHtml(m.file)}</td>
+        <td><span class="cortex-badge" style="background: ${isClean ? 'rgba(0,255,136,0.15)' : 'rgba(255,40,64,0.2)'}; color: ${isClean ? 'var(--emerald)' : 'var(--red)'};">${m.status}</span></td>
+        <td style="color: var(--dim);">${m.lines_of_code}</td>
+        <td style="color: var(--amber);">${m.function_count}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+}
+
+function submitSelfPatch(isDryRun) {
+  const file = document.getElementById('patch-file-input')?.value.trim();
+  const target = document.getElementById('patch-target-text')?.value;
+  const replacement = document.getElementById('patch-replace-text')?.value;
+  const reason = document.getElementById('patch-reason-text')?.value.trim() || 'Manual self-patch execution';
+
+  if (!file || !target) {
+    alert("Please specify the target file and code block to patch.");
+    return;
+  }
+
+  playSound('click');
+  const actionType = isDryRun ? 'dry_run' : 'patch';
+  sendWS({
+    type: 'task',
+    text: `Execute autonomous code patch action '${actionType}' on '${file}' with reason '${reason}' replacing target block with replacement.`
+  });
+  appendDiagLog(`Dispatched code self-patch (${actionType}) for ${file}`);
+}
+
+function rollbackSelfPatch() {
+  if (confirm("Rollback to the most recent pre-patch snapshot?")) {
+    playSound('beep');
+    sendWS({ type: 'rollback_code_patch' });
+    appendDiagLog("Requested rollback of latest code patch snapshot.");
+  }
+}
+
+// ---------------------------------------------------------------------
+// BIOMETRIC VOICE CLONE & VOCAL STUDIO
+// ---------------------------------------------------------------------
+function openVoiceStudioDrawer() {
+  playSound('click');
+  const d = document.getElementById('voice-studio-drawer');
+  if (d) {
+    d.classList.add('open');
+    sendWS({ type: 'get_voice_profiles' });
+  }
+}
+
+function closeVoiceStudioDrawer() {
+  const d = document.getElementById('voice-studio-drawer');
+  if (d) d.classList.remove('open');
+}
+
+function renderVoiceProfiles(profiles, activeId) {
+  if (!profiles) return;
+  const container = document.getElementById('voice-profiles-container');
+  const activeBadge = document.getElementById('voice-active-badge');
+  const currentName = document.getElementById('voice-current-name');
+  const currentTimbre = document.getElementById('voice-current-timbre');
+  const currentPitch = document.getElementById('voice-current-pitch');
+  const currentRate = document.getElementById('voice-current-rate');
+  const currentF0 = document.getElementById('voice-current-f0');
+  const modelBadge = document.getElementById('voice-model-badge');
+
+  const activeProf = profiles.find(p => p.id === activeId) || profiles[0];
+  if (activeProf) {
+    if (activeBadge) activeBadge.textContent = activeProf.name.toUpperCase();
+    if (currentName) currentName.textContent = activeProf.name;
+    if (currentTimbre) currentTimbre.textContent = activeProf.timbre_description;
+    if (currentPitch) currentPitch.textContent = activeProf.pitch;
+    if (currentRate) currentRate.textContent = activeProf.rate;
+    if (currentF0) currentF0.textContent = `${activeProf.f0_target_hz} Hz`;
+    if (modelBadge) modelBadge.textContent = activeProf.neural_voice;
+  }
+
+  if (container) {
+    container.innerHTML = '';
+    profiles.forEach(p => {
+      const card = document.createElement('div');
+      const isActive = (p.id === activeId);
+      card.className = `voice-profile-card ${isActive ? 'active' : ''}`;
+      card.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <div>
+            <strong style="color: ${isActive ? 'var(--cyan)' : 'var(--txt)'}; font-size: 12px;">${escapeHtml(p.name)}</strong>
+            <span style="font-size: 9px; font-family: var(--font-mono); color: var(--dim); margin-left: 6px;">[${escapeHtml(p.neural_voice)}]</span>
+          </div>
+          ${isActive ? '<span class="cortex-badge" style="background: rgba(0,255,136,0.2); color: var(--emerald);">ACTIVE</span>' : ''}
+        </div>
+        <div style="font-size: 10px; color: var(--dim); line-height: 1.3; margin-bottom: 8px;">
+          ${escapeHtml(p.timbre_description)} (F0: ${p.f0_target_hz}Hz, Pitch: ${p.pitch}, Rate: ${p.rate})
+        </div>
+        <div style="display: flex; gap: 6px; justify-content: flex-end;">
+          <button class="stark-btn mini" onclick="auditionVoiceProfile('${p.id}')">🎵 AUDITION</button>
+          ${!isActive ? `<button class="stark-btn mini" onclick="setVoiceProfile('${p.id}')" style="background: rgba(0,240,255,0.15);">ACTIVATE</button>` : ''}
+        </div>
+      `;
+      container.appendChild(card);
+    });
+  }
+}
+
+function setVoiceProfile(profileId) {
+  playSound('chime');
+  sendWS({ type: 'set_voice_profile', profile_id: profileId });
+  appendDiagLog(`Activated vocal biometric persona: ${profileId}`);
+}
+
+function auditionVoiceProfile(profileId) {
+  playSound('click');
+  const status = document.getElementById('voice-audition-status');
+  if (status) status.textContent = `Synthesizing biometric audition harmonics for '${profileId}'...`;
+  sendWS({ type: 'audition_voice_profile', profile_id: profileId });
+}
+
+function handleVoiceAuditionClip(msg) {
+  const status = document.getElementById('voice-audition-status');
+  if (status) {
+    status.innerHTML = `✅ Audition Received: "<em>${escapeHtml(msg.phrase)}</em>"`;
+  }
+  if (msg.audio) {
+    playNeuralAudio(msg.audio);
+    appendDiagLog(`Playing biometric voice audition for profile '${msg.profile_id}'`);
+  }
 }
 
 function restoreChatHistory(messages) {

@@ -77,6 +77,12 @@ from core.ar_overlays import get_holographic_window_matrix, ar_control_window
 from core.predictive import get_predictive_engine
 from core.biometrics import get_biometric_sensor
 
+# Import Quantum P2P, Code Self-Patcher, and Voice Clone Biometrics
+from core.quantum_p2p import get_quantum_p2p_mesh
+from core.self_patcher import get_code_self_patcher
+from core.voice_clone import get_voice_biometrics
+from core.audio_cache import clear_audio_cache
+
 # Active WebSocket session registry for proactive broadcasting
 ACTIVE_SESSIONS = set()
 
@@ -245,6 +251,28 @@ TOOLS = [
     tool("execute_predicted_macro", "Execute a predictive automated workflow macro: 'dev_sprint', 'executive_briefing', 'deep_focus', 'social_comms', 'optical_scan', 'night_lock'.",
          {"workflow_id": S}, ["workflow_id"]),
     tool("get_biometric_telemetry", "Retrieve real-time neural biometric metrics: Stress Index, Cognitive Focus score, estimated BPM, and emotional valence state."),
+    tool("p2p_mesh_action", "Manage Quantum-Grade Encrypted P2P Communications Mesh: 'status' (mesh topology, peer latencies, active cipher), 'pair' (enroll new mesh node with quantum certificate), 'send' (transmit quantum-encrypted message packet to a peer node), 'generate_key' (derive fresh quantum entropy keys).",
+         {"action": {"type": "string", "enum": ["status", "pair", "send", "generate_key"], "description": "The P2P action to perform."},
+          "peer_id": {"type": "string", "description": "Target peer node ID (e.g. 'NODE-MARK-VII-SATELLITE', 'NODE-RADON-MOBILE')."},
+          "message": {"type": "string", "description": "Confidential message payload to encrypt and dispatch."},
+          "node_name": {"type": "string", "description": "Human-readable label for a new peer node to enroll."}},
+         ["action"]),
+    tool("code_self_patch", "Autonomous Code Self-Patching Runtime: 'diagnose' (AST syntax check and health score across all workspace Python files), 'inspect' (read exact lines of a file), 'dry_run' (test diff and verify compilation without applying), 'patch' (surgically patch code with AST compilation verification and rollback snapshot), 'rollback' (restore previous pre-patch file snapshot), 'snapshots' (list historical snapshots).",
+         {"action": {"type": "string", "enum": ["diagnose", "inspect", "dry_run", "patch", "rollback", "snapshots"], "description": "Self-patching action to perform."},
+          "file": {"type": "string", "description": "Relative workspace file path (e.g. 'server.py', 'core/intel.py')."},
+          "target": {"type": "string", "description": "Exact code block to be replaced (required for patch / dry_run)."},
+          "replacement": {"type": "string", "description": "New replacement code block (required for patch / dry_run)."},
+          "reason": {"type": "string", "description": "Architectural or bug-fix motivation for the patch."},
+          "start_line": {"type": "integer", "description": "Start line for inspection (optional)."},
+          "end_line": {"type": "integer", "description": "End line for inspection (optional)."}},
+         ["action"]),
+    tool("voice_biometric_action", "Voice Clone Biometric Synthesis & Vocal Profiling: 'list_profiles' (retrieve all vocal identities including 'jarvis_prime', 'sir_clone', 'friday_aux', 'sentinel_overwatch'), 'set_profile' (switch active synthesis voice persona), 'audition' (synthesize audition clip), 'tune_parameters' (adjust pitch/rate/volume), 'get_active' (current profile details).",
+         {"action": {"type": "string", "enum": ["list_profiles", "set_profile", "audition", "tune_parameters", "get_active"], "description": "Voice biometric action."},
+          "profile_id": {"type": "string", "description": "Voice profile ID (e.g. 'jarvis_prime', 'sir_clone', 'friday_aux', 'sentinel_overwatch')."},
+          "pitch": {"type": "string", "description": "Pitch offset, e.g. '-4Hz', '+2Hz'."},
+          "rate": {"type": "string", "description": "Speed rate offset, e.g. '+12%', '+16%'."},
+          "volume": {"type": "string", "description": "Volume offset, e.g. '+0%', '+5%'."}},
+         ["action"]),
 ]
 
 def get_telemetry():
@@ -367,6 +395,15 @@ COMMUNICATION & APP INTEGRATIONS:
   * Stored memories are semantically retrieved based on conversation context.
   * Use 'remember' to store facts, preferences, workflows, or project notes.
   * Use 'search_memory' to find past memories, or 'forget' to remove records.
+- QUANTUM-GRADE ENCRYPTED P2P COMMS:
+  * You maintain an encrypted peer-to-peer mesh network across workstation and satellite nodes ('core/quantum_p2p.py').
+  * Use 'p2p_mesh_action' ('status', 'pair', 'send', 'generate_key') to monitor quantum key entropy, transmit confidential packets, and enroll new nodes.
+- AUTONOMOUS CODE SELF-PATCHING RUNTIME:
+  * You can inspect, test, and self-patch Python files in the workspace with automated rollback snapshotting ('core/self_patcher.py').
+  * Use 'code_self_patch' ('diagnose', 'inspect', 'dry_run', 'patch', 'rollback', 'snapshots') to repair syntax, optimize logic, or fix regressions safely.
+- VOICE CLONE BIOMETRIC SYNTHESIS:
+  * You feature biometric vocal identity profiling ('core/voice_clone.py').
+  * Use 'voice_biometric_action' ('list_profiles', 'set_profile', 'audition', 'tune_parameters', 'get_active') to switch voice persona ('jarvis_prime', 'sir_clone', 'friday_aux', 'sentinel_overwatch') and tune vocal acoustic parameters.
 - ANTIGRAVITY EVOLUTION DIRECTIVES:
   * When Sir asks to improve the project, generate prompts/commands for Antigravity, or evolve J.A.R.V.I.S., call 'generate_antigravity_prompt'.
   * Explain the architectural benefits of each enhancement in your response, highlighting that 1-click Antigravity prompt cards have been generated in his HUD.
@@ -694,8 +731,8 @@ def sanitize_messages_for_cloud(msgs: list) -> list:
             tcs = m.get("tool_calls")
             if tcs:
                 valid_tcs = [tc for tc in tcs if not str(tc.get("id", "")).startswith("local_call_")]
-                # Ensure all tool calls have valid thought_signature for Gemini 2.5 / 3.5
-                has_thought_sig = all(
+                # Ensure at least one tool call has valid thought_signature for Gemini 2.5 / 3.5
+                has_thought_sig = any(
                     bool((tc.get("extra_content") or {}).get("google", {}).get("thought_signature"))
                     for tc in valid_tcs
                 )
@@ -721,6 +758,10 @@ def sanitize_messages_for_cloud(msgs: list) -> list:
                 pending_tool_calls.remove(tcid)
             elif not str(tcid).startswith("local_call_"):
                 pass
+
+    # Gemini requirement: message history must never end on an assistant turn
+    while cleaned and cleaned[-1].get("role") == "assistant":
+        cleaned.pop()
 
     return cleaned
 
@@ -1469,6 +1510,86 @@ class JarvisSession:
             await self.send(type="biometric_telemetry", metrics=bio)
             return f"Biometrics: State {bio['valence_state']}, Stress {bio['stress_index']}%, Focus {bio['cognitive_focus']}%, BPM {bio['bpm']}."
 
+        if name == "p2p_mesh_action":
+            mesh = get_quantum_p2p_mesh()
+            act = args.get("action", "status")
+            if act == "status":
+                status = mesh.get_mesh_status()
+                await self.send(type="p2p_mesh_status", **status)
+                return f"Quantum P2P Mesh: {status['active_peers_count']} active peers, cipher {status['cipher_suite']}, entropy {status['quantum_entropy_level']}."
+            elif act == "send":
+                peer_id = args.get("peer_id", "NODE-MARK-VII-SATELLITE")
+                msg = args.get("message", "Quantum ping from Stark Alpha Prime.")
+                packet = mesh.encrypt_packet(peer_id, msg)
+                await self.send(type="p2p_mesh_status", **mesh.get_mesh_status())
+                return f"Quantum-encrypted packet dispatched to {peer_id}. Signature: {packet['quantum_signature']}."
+            elif act == "pair":
+                node_name = args.get("node_name", "Remote Satellite Node")
+                paired = mesh.pair_new_node(node_name)
+                await self.send(type="p2p_mesh_status", **mesh.get_mesh_status())
+                return f"Enrolled node '{node_name}' (ID: {paired['enrolled_node_id']}) with fingerprint {paired['pqc_fingerprint']}."
+            elif act == "generate_key":
+                entropy_sig = mesh.generate_quantum_entropy_signature("KEY_ROTATION")
+                return f"Rotated quantum entropy keys. Signature: {entropy_sig}."
+
+        if name == "code_self_patch":
+            patcher = get_code_self_patcher()
+            act = args.get("action", "diagnose")
+            if act == "diagnose":
+                diag = patcher.run_code_diagnostics()
+                await self.send(type="code_diagnostics", **diag)
+                return f"Code Diagnostics: Health score {diag['health_score']}% ({diag['clean_modules']}/{diag['checked_modules']} clean). Total LOC: {diag['total_lines_of_code']} across {diag['total_functions_indexed']} functions."
+            elif act == "inspect":
+                rel_file = args.get("file", "server.py")
+                res = patcher.inspect_file(rel_file, args.get("start_line", 1), args.get("end_line", 80))
+                return f"File '{rel_file}' lines {res['start_line']}-{res['end_line']} (Total: {res['total_lines']}):\n{res['snippet']}"
+            elif act in ["dry_run", "patch"]:
+                is_dry = (act == "dry_run")
+                rel_file = args.get("file", "server.py")
+                target = args.get("target", "")
+                replacement = args.get("replacement", "")
+                reason = args.get("reason", "Autonomous performance enhancement")
+                res = patcher.apply_patch(rel_file, target, replacement, reason, dry_run=is_dry)
+                diag = patcher.run_code_diagnostics()
+                await self.send(type="code_diagnostics", **diag)
+                return f"Self-patch ({'DRY RUN' if is_dry else 'APPLIED'}): {res['message']}\nDiff summary:\n{res['diff'][:400]}"
+            elif act == "rollback":
+                res = patcher.rollback_latest_patch()
+                diag = patcher.run_code_diagnostics()
+                await self.send(type="code_diagnostics", **diag)
+                return res["message"]
+            elif act == "snapshots":
+                snaps = patcher.list_snapshots()
+                return f"Patch history contains {len(snaps)} rollback snapshots."
+
+        if name == "voice_biometric_action":
+            vb = get_voice_biometrics()
+            act = args.get("action", "list_profiles")
+            if act == "list_profiles":
+                profs = vb.list_profiles()
+                await self.send(type="voice_profiles_data", profiles=profs, active_id=vb.active_profile_id)
+                active = vb.get_active_profile()
+                return f"Available voice profiles: {', '.join([p['name'] for p in profs])}. Active: '{active['name']}'."
+            elif act == "set_profile":
+                pid = args.get("profile_id", "jarvis_prime")
+                res = vb.set_active_profile(pid)
+                clear_audio_cache()
+                await self.send(type="voice_profiles_data", profiles=vb.list_profiles(), active_id=vb.active_profile_id)
+                return f"Vocal biometric synthesis switched to '{res['name']}'. Model: {res['neural_voice']} (Pitch: {res['pitch']}, Rate: {res['rate']})."
+            elif act == "tune_parameters":
+                pid = args.get("profile_id", vb.active_profile_id)
+                res = vb.update_profile_parameters(pid, pitch=args.get("pitch"), rate=args.get("rate"), volume=args.get("volume"))
+                clear_audio_cache()
+                return f"Vocal parameters updated for '{pid}': {res['updated']}."
+            elif act == "audition":
+                pid = args.get("profile_id", vb.active_profile_id)
+                clip = await vb.synthesize_audition_clip(pid)
+                await self.send(type="voice_audition_clip", profile_id=pid, audio=clip["audio_base64"], phrase=clip["phrase"])
+                return f"Audition clip synthesized for profile '{clip['profile_name']}'."
+            elif act == "get_active":
+                active = vb.get_active_profile()
+                return f"Active vocal profile: '{active['name']}' ({active['neural_voice']}, pitch={active['pitch']}, rate={active['rate']})."
+
         return "Unknown command requested."
 
     async def turn(self, user_text: str):
@@ -1547,26 +1668,26 @@ class JarvisSession:
 
                             if delta.tool_calls:
                                 for tc in delta.tool_calls:
-                                    idx = tc.index if tc.index is not None else 0
-                                    if idx not in tool_calls_dict:
-                                        tool_calls_dict[idx] = {
-                                            "id": tc.id or f"call_{time.time()}_{idx}",
+                                    key = tc.id or (f"idx_{tc.index}" if tc.index is not None else f"call_{len(tool_calls_dict)}")
+                                    if key not in tool_calls_dict:
+                                        tool_calls_dict[key] = {
+                                            "id": tc.id or f"call_{time.time()}_{len(tool_calls_dict)}",
                                             "function": {"name": "", "arguments": ""},
                                             "type": "function"
                                         }
                                     if tc.id:
-                                        tool_calls_dict[idx]["id"] = tc.id
+                                        tool_calls_dict[key]["id"] = tc.id
                                     if tc.function:
                                         if tc.function.name:
-                                            tool_calls_dict[idx]["function"]["name"] += tc.function.name
+                                            tool_calls_dict[key]["function"]["name"] += tc.function.name
                                         if tc.function.arguments:
-                                            tool_calls_dict[idx]["function"]["arguments"] += tc.function.arguments
+                                            tool_calls_dict[key]["function"]["arguments"] += tc.function.arguments
 
                                     extra = getattr(tc, 'extra_content', None) or (
                                         tc.model_extra.get('extra_content') if hasattr(tc, 'model_extra') and tc.model_extra else None
                                     )
                                     if extra:
-                                        tool_calls_dict[idx]["extra_content"] = extra
+                                        tool_calls_dict[key]["extra_content"] = extra
 
                         if sentence_buffer.strip():
                             s_clean = sentence_buffer.strip()
@@ -1581,7 +1702,7 @@ class JarvisSession:
                             except Exception as e:
                                 print(f"Chat persistence error: {e}")
 
-                        tool_calls_list = [v for k, v in sorted(tool_calls_dict.items())] if tool_calls_dict else None
+                        tool_calls_list = list(tool_calls_dict.values()) if tool_calls_dict else None
                         
                         class StreamChoice:
                             def __init__(self, content, tool_calls):
@@ -1647,7 +1768,14 @@ class JarvisSession:
                     fn_name = call["function"]["name"] if isinstance(call, dict) else call.function.name
                     fn_args_raw = call["function"]["arguments"] if isinstance(call, dict) else (call.function.arguments or "{}")
                     call_id = call["id"] if isinstance(call, dict) else call.id
-                    args = json.loads(fn_args_raw or "{}")
+                    try:
+                        args = json.loads(fn_args_raw or "{}")
+                    except Exception:
+                        try:
+                            decoder = json.JSONDecoder()
+                            args, _ = decoder.raw_decode((fn_args_raw or "").strip())
+                        except Exception:
+                            args = {}
                     tools_executed += 1
 
                     # Ask approval ONLY for destructive commands
@@ -1746,6 +1874,10 @@ async def websocket_handler(ws: WebSocket):
     await session.send(type="predictive_workflows", list=get_predictive_engine().predict_workflows())
     await session.send(type="biometric_telemetry", metrics=get_biometric_sensor().get_latest_telemetry())
     await session.send(type="ar_window_matrix", **get_holographic_window_matrix())
+    await session.send(type="p2p_mesh_status", **get_quantum_p2p_mesh().get_mesh_status())
+    await session.send(type="code_diagnostics", **get_code_self_patcher().run_code_diagnostics())
+    vb = get_voice_biometrics()
+    await session.send(type="voice_profiles_data", profiles=vb.list_profiles(), active_id=vb.active_profile_id)
     
     # Restore persistent chat history across page refresh from SQLite cortex
     try:
@@ -1835,6 +1967,46 @@ async def websocket_handler(ws: WebSocket):
 
             elif msg_type == "get_biometrics":
                 await session.send(type="biometric_telemetry", metrics=get_biometric_sensor().get_latest_telemetry())
+
+            elif msg_type == "get_p2p_mesh":
+                await session.send(type="p2p_mesh_status", **get_quantum_p2p_mesh().get_mesh_status())
+
+            elif msg_type == "send_p2p_packet":
+                peer_id = data.get("peer_id", "NODE-MARK-VII-SATELLITE")
+                msg_text = data.get("message", "Quantum ping from Stark Alpha Prime.")
+                get_quantum_p2p_mesh().encrypt_packet(peer_id, msg_text)
+                await session.send(type="p2p_mesh_status", **get_quantum_p2p_mesh().get_mesh_status())
+
+            elif msg_type == "pair_p2p_node":
+                node_name = data.get("node_name", "Remote Mesh Node")
+                get_quantum_p2p_mesh().pair_new_node(node_name)
+                await session.send(type="p2p_mesh_status", **get_quantum_p2p_mesh().get_mesh_status())
+
+            elif msg_type == "get_code_diagnostics":
+                await session.send(type="code_diagnostics", **get_code_self_patcher().run_code_diagnostics())
+
+            elif msg_type == "rollback_code_patch":
+                res = get_code_self_patcher().rollback_latest_patch()
+                await session.send(type="log", text=res["message"])
+                await session.send(type="code_diagnostics", **get_code_self_patcher().run_code_diagnostics())
+
+            elif msg_type == "get_voice_profiles":
+                vb = get_voice_biometrics()
+                await session.send(type="voice_profiles_data", profiles=vb.list_profiles(), active_id=vb.active_profile_id)
+
+            elif msg_type == "set_voice_profile":
+                pid = data.get("profile_id", "jarvis_prime")
+                vb = get_voice_biometrics()
+                res = vb.set_active_profile(pid)
+                clear_audio_cache()
+                await session.send(type="voice_profiles_data", profiles=vb.list_profiles(), active_id=vb.active_profile_id)
+                await session.send(type="log", text=f"🎙️ Vocal Biometric Persona: {res['name']}")
+
+            elif msg_type == "audition_voice_profile":
+                pid = data.get("profile_id", "jarvis_prime")
+                vb = get_voice_biometrics()
+                clip = await vb.synthesize_audition_clip(pid)
+                await session.send(type="voice_audition_clip", profile_id=pid, audio=clip["audio_base64"], phrase=clip["phrase"])
 
             elif msg_type == "approve":
                 aid = data.get("id")

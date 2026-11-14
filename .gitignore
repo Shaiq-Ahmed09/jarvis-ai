@@ -17,14 +17,7 @@ dist/
 build/
 
 # J.A.R.V.I.S. Local Databases, Vector Memory & Cached Sessions
-data/instagram_session.json
-data/jarvis.db
-data/jarvis.db-journal
-data/jarvis.db-wal
-data/chroma/
-data/audio_cache/
-data/story_*.jpg
-data/*.png
+data/
 cortex_db/
 
 # Portable Binaries & Development Tools
