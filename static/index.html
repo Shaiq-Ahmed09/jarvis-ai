@@ -820,6 +820,22 @@ body {
 .optics-viewport-frame:hover img {
   transform: scale(1.02);
 }
+.optics-viewport-frame video {
+  width: 100%;
+  max-height: 195px;
+  object-fit: cover;
+  border-radius: 3px;
+  display: block;
+  transform: scaleX(-1);
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
+}
+.optics-cam-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 4px 2px 4px;
+}
 .optics-hud-brackets .bracket-tl,
 .optics-hud-brackets .bracket-tr,
 .optics-hud-brackets .bracket-bl,
@@ -1442,6 +1458,7 @@ body {
 
   <span class="protocols-label">OPTICAL SENSORY VIEWPORT</span>
   <div class="optics-toolbar">
+    <button class="stark-btn mini" id="optics-cam-btn" onclick="toggleOpticalCamera()" title="Toggle live optical webcam feed in viewport">📹 CAM</button>
     <button class="stark-btn mini" onclick="quickAction('Take a screenshot with coordinate grid and inspect the display.')" title="Take instantaneous screenshot">📸 SNAP</button>
     <button class="stark-btn mini" onclick="quickAction('Perform an optical neural scan of the display and detect all interactive buttons and elements.')" title="Optical neural text & element scan">👁️ SCAN</button>
     <button class="stark-btn mini" onclick="quickAction('Show desktop')" title="Minimize windows & show desktop">🖥️ DESKTOP</button>
@@ -1453,6 +1470,7 @@ body {
     </div>
     <div class="optics-viewport-frame" id="optics-viewport-frame" onclick="openOpticsModal()">
       <img id="optics-img" style="display: none; cursor: zoom-in;" referrerpolicy="no-referrer" alt="Optical sensory feed" title="Click to enlarge in holographic lightbox">
+      <video id="optics-video" autoplay playsinline muted style="display: none;"></video>
       <div class="optics-hud-brackets">
         <span class="bracket-tl"></span><span class="bracket-tr"></span>
         <span class="bracket-bl"></span><span class="bracket-br"></span>
@@ -1463,6 +1481,10 @@ body {
         <div class="placeholder-crosshair"></div>
         <span class="optics-label" id="optics-label">NO ACTIVE OPTICAL STREAM</span>
       </div>
+    </div>
+    <div class="optics-cam-controls" id="optics-cam-controls" style="display: none;">
+      <button class="stark-btn mini" onclick="captureCameraSnapshot()" title="Capture instantaneous photo frame">📸 CAPTURE</button>
+      <button class="stark-btn mini danger" onclick="stopOpticalCamera()" title="Terminate live optical feed">✕ STOP CAM</button>
     </div>
     <div class="optics-intel-info" id="optics-intel-info" style="display: none;">
       <div class="optics-title" id="optics-title"></div>
@@ -2886,8 +2908,170 @@ function renderAntigravityDirective(d) {
 
 let currentIntelUrl = "";
 let currentIntelBackup = "";
+let opticalMediaStream = null;
+
+async function startOpticalCamera() {
+  const video = $('#optics-video');
+  const img = $('#optics-img');
+  const placeholder = $('#optics-placeholder');
+  const box = $('#optics-box');
+  const headerBar = $('#optics-header-bar');
+  const tag = $('#optics-tag');
+  const camControls = $('#optics-cam-controls');
+  const camBtn = $('#optics-cam-btn');
+
+  if (opticalMediaStream) {
+    console.log("Optical camera is already streaming.");
+    return;
+  }
+
+  try {
+    appendDiagLog("Requesting hardware optical camera stream...");
+    opticalMediaStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        facingMode: "user"
+      },
+      audio: false
+    });
+
+    if (video) {
+      video.srcObject = opticalMediaStream;
+      video.style.display = 'block';
+      await video.play();
+    }
+
+    if (img) img.style.display = 'none';
+    if (placeholder) placeholder.style.display = 'none';
+    if (box) box.classList.add('active-intel');
+    if (headerBar) headerBar.style.display = 'flex';
+    if (tag) tag.textContent = 'LIVE OPTICAL FEED // 30 FPS';
+    if (camControls) camControls.style.display = 'flex';
+    if (camBtn) {
+      camBtn.classList.add('recording');
+      camBtn.textContent = '🔴 LIVE';
+    }
+
+    appendDiagLog("Optical camera stream online and locked to viewport.");
+    playSound('beep');
+
+    sendWS({
+      type: 'camera_status',
+      status: 'active'
+    });
+  } catch (err) {
+    console.error("Camera access error:", err);
+    appendDiagLog(`Optical camera error: ${err.message || err.name}`);
+    if (placeholder) {
+      placeholder.style.display = 'flex';
+      const label = $('#optics-label');
+      if (label) label.textContent = 'CAMERA ACCESS BLOCKED OR UNAVAILABLE';
+    }
+    sendWS({
+      type: 'camera_status',
+      status: 'error',
+      error: err.message || err.name
+    });
+  }
+}
+
+function stopOpticalCamera() {
+  const video = $('#optics-video');
+  const placeholder = $('#optics-placeholder');
+  const headerBar = $('#optics-header-bar');
+  const camControls = $('#optics-cam-controls');
+  const camBtn = $('#optics-cam-btn');
+  const tag = $('#optics-tag');
+
+  if (opticalMediaStream) {
+    opticalMediaStream.getTracks().forEach(track => track.stop());
+    opticalMediaStream = null;
+  }
+
+  if (video) {
+    video.pause();
+    video.srcObject = null;
+    video.style.display = 'none';
+  }
+
+  if (camControls) camControls.style.display = 'none';
+  if (camBtn) {
+    camBtn.classList.remove('recording');
+    camBtn.textContent = '📹 CAM';
+  }
+
+  const img = $('#optics-img');
+  if (!img || img.style.display === 'none' || !img.src) {
+    if (placeholder) placeholder.style.display = 'flex';
+    const label = $('#optics-label');
+    if (label) label.textContent = 'NO ACTIVE OPTICAL STREAM';
+    if (headerBar) headerBar.style.display = 'none';
+  } else {
+    if (tag) tag.textContent = 'OPTICAL TELEMETRY';
+  }
+
+  appendDiagLog("Optical camera feed deactivated.");
+  playSound('click');
+
+  sendWS({
+    type: 'camera_status',
+    status: 'inactive'
+  });
+}
+
+function toggleOpticalCamera() {
+  if (opticalMediaStream) {
+    stopOpticalCamera();
+  } else {
+    startOpticalCamera();
+  }
+}
+
+function captureCameraSnapshot() {
+  const video = $('#optics-video');
+  if (!video || !opticalMediaStream) {
+    appendDiagLog("Cannot capture snapshot: optical camera feed is offline.");
+    return;
+  }
+
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 720;
+    const ctx = canvas.getContext('2d');
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+    const b64 = dataUrl.split(',')[1];
+
+    appendDiagLog("Optical camera snapshot captured.");
+    playSound('beep');
+
+    sendWS({
+      type: 'camera_frame',
+      image: b64
+    });
+
+    const snapBubble = document.createElement('div');
+    snapBubble.className = 'bubble jarvis';
+    snapBubble.innerHTML = `📸 <strong>OPTICAL SNAPSHOT CAPTURED:</strong> Frame archived to visual cortex.`;
+    $('#chat-log').appendChild(snapBubble);
+    $('#chat-log').scrollTop = 1e9;
+  } catch (err) {
+    console.error("Failed to capture camera snapshot:", err);
+    appendDiagLog(`Snapshot error: ${err.message}`);
+  }
+}
 
 function renderIntelMedia(msg) {
+  if (opticalMediaStream) {
+    const video = $('#optics-video');
+    if (video) video.style.display = 'none';
+    const camControls = $('#optics-cam-controls');
+    if (camControls) camControls.style.display = 'none';
+  }
   currentIntelUrl = msg.image_url || "";
   currentIntelBackup = msg.backup_url || "";
 
@@ -2936,6 +3120,12 @@ function renderIntelMedia(msg) {
 }
 
 function renderScreenFrame(msg) {
+  if (opticalMediaStream) {
+    const video = $('#optics-video');
+    if (video) video.style.display = 'none';
+    const camControls = $('#optics-cam-controls');
+    if (camControls) camControls.style.display = 'none';
+  }
   const box = $('#optics-box');
   const headerBar = $('#optics-header-bar');
   const tag = $('#optics-tag');
@@ -3019,6 +3209,14 @@ function handleWSMessage(e) {
     $('#clock').textContent = msg.timestamp || new Date().toLocaleTimeString();
   } else if (msg.type === 'screen') {
     renderScreenFrame(msg);
+  } else if (msg.type === 'camera_stream') {
+    if (msg.action === 'start') {
+      startOpticalCamera();
+    } else if (msg.action === 'stop') {
+      stopOpticalCamera();
+    } else if (msg.action === 'snapshot') {
+      captureCameraSnapshot();
+    }
   } else if (msg.type === 'approval') {
     renderApproval(msg);
   } else if (msg.type === 'memories') {
@@ -3802,11 +4000,34 @@ function setupOpticsInteractivity() {
 
 function openOpticsModal() {
   const img = document.getElementById('optics-img');
-  if (!img || !img.src || img.style.display === 'none') return;
+  const video = document.getElementById('optics-video');
   const modal = document.getElementById('optics-modal');
   const modalImg = document.getElementById('optics-modal-img');
   const label = document.getElementById('optics-modal-label');
   const tag = document.getElementById('optics-tag');
+
+  if (video && video.style.display !== 'none' && video.srcObject) {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 1280;
+      canvas.height = video.videoHeight || 720;
+      const ctx = canvas.getContext('2d');
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      if (modal && modalImg) {
+        modalImg.src = canvas.toDataURL('image/jpeg', 0.92);
+        if (label) label.textContent = 'OPTICAL SENSORY // LIVE CAMERA SNAPSHOT';
+        modal.classList.add('open');
+        playSound('beep');
+      }
+      return;
+    } catch (e) {
+      console.warn("Could not capture video frame for modal:", e);
+    }
+  }
+
+  if (!img || !img.src || img.style.display === 'none') return;
   if (modal && modalImg) {
     modalImg.src = img.src;
     if (label && tag && tag.textContent) {
@@ -3829,6 +4050,7 @@ function appendSuggestionChips(container = null, customChips = null) {
 
   const chips = customChips || [
     { label: "🌅 Executive Briefing", cmd: "Deliver my morning executive briefing." },
+    { label: "📹 Optical Camera", cmd: "Activate optical sensory camera feed in the viewport." },
     { label: "📱 WhatsApp", cmd: "Check my WhatsApp messages and recent history." },
     { label: "📸 Instagram DMs", cmd: "Check my Instagram direct messages and unread DMs." },
     { label: "💬 Chat with Friends", cmd: "Converse with my Instagram friends who sent messages, continuing our conversations properly." },

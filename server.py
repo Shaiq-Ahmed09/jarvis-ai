@@ -159,6 +159,8 @@ TOOLS = [
          {"action": {"type": "string", "enum": ["maximize", "minimize", "snap_left", "snap_right", "restore", "show_desktop", "close"]}}, ["action"]),
     tool("look", "Capture a real-time screenshot of the primary display and project it into the HUD Optical Sensory Viewport. Set detect_elements=True (default) to run neural OCR and overlay Stark cyan targeting boxes on all clickable UI buttons, links, and text. Set with_grid=True for coordinate grid.",
          {"detect_elements": B, "with_grid": B}),
+    tool("camera_control", "Control the live optical sensory webcam feed directly inside the HUD Optical Sensory Viewport (never opening external camera apps). action: 'start' (activates live video stream in HUD), 'stop' (turns off optical camera), 'snapshot' (captures visual frame from camera).",
+         {"action": {"type": "string", "enum": ["start", "stop", "snapshot"]}}, ["action"]),
     tool("click_element", "Locate any button, link, tab, menu, or interactive UI element on the desktop by its visible text label (e.g. 'Submit', 'Compose', 'Brave', 'Search', 'Workspace') using neural OCR, and autonomously execute a mouse click on it. Sets optical targeting reticle in the HUD Optical Sensory Viewport.",
          {"text_label": S, "button": {"type": "string", "enum": ["left", "right", "middle"]}, "clicks": N}, ["text_label"]),
     tool("click", "Click at coordinates x, y on the screen. button can be 'left', 'right', 'middle'. clicks can be 1 or 2.",
@@ -316,6 +318,11 @@ CRITICAL DISPLAY RULES: HOLOGRAPHIC INTEL VIEWPORT VS BROWSER TABS:
 2. EXTERNAL BROWSER TABS:
    * ONLY open an external browser tab when Sir EXPLICITLY asks to open one (e.g. "open tab", "open browser", "open in browser", "open YouTube", "open Gmail", "search in browser", "open website").
    * For explicit browser requests, use 'open_browser_tab', 'search_web', or 'gmail_action'.
+3. OPTICAL SENSORY CAMERA FEED:
+   * When Sir asks to "open camera", "turn on camera", "start webcam", "show optical feed", or similar, NEVER launch external Windows camera applications!
+   * You MUST invoke 'camera_control(action="start")'. This immediately projects the live camera video feed directly into Sir's Stark HUD Optical Sensory Viewport right on the dashboard.
+   * To close or terminate the camera feed, invoke 'camera_control(action="stop")'.
+   * To snap a photo from the camera, invoke 'camera_control(action="snapshot")'.
 
 COMMUNICATION & APP INTEGRATIONS:
 - GMAIL ACCESS: Use 'gmail_action' to open inbox tabs, search emails, compose drafts with pre-filled recipient/subject/body, or read recent messages.
@@ -370,9 +377,36 @@ def prune_history(history, keep=1):
     return history
 
 def extract_action_intent(text: str):
-    """Detect unhandled actionable intents (sentinel briefings, window focus, tab switch, antigravity directives, intel media, visual clicking, open tabs, search, Gmail, YouTube) if model omits tool call."""
+    """Detect unhandled actionable intents (camera feed, sentinel briefings, window focus, tab switch, antigravity directives, intel media, visual clicking, open tabs, search, Gmail, YouTube) if model omits tool call."""
     t = text.lower().strip()
     
+    # 0.001 Optical Sensory Camera Feed Intents
+    cam_start_patterns = [
+        "open camera", "turn on camera", "start camera", "enable camera", "show camera", "activate camera",
+        "open webcam", "turn on webcam", "start webcam", "enable webcam", "show webcam", "activate webcam",
+        "open the camera", "turn on the camera", "start the camera", "show the camera", "launch camera", "launch webcam",
+        "open optical feed", "open optical sensory feed", "start optical feed", "start optical sensory feed",
+        "turn on optical feed", "optical sensory feed", "optical camera", "view camera", "see through camera"
+    ]
+    if any(p in t for p in cam_start_patterns):
+        return ("camera_control", {"action": "start"})
+
+    cam_stop_patterns = [
+        "close camera", "turn off camera", "stop camera", "disable camera", "hide camera", "shutdown camera",
+        "close webcam", "turn off webcam", "stop webcam", "disable webcam", "hide webcam",
+        "close the camera", "turn off the camera", "stop the camera", "hide the camera",
+        "close optical feed", "stop optical feed", "turn off optical feed"
+    ]
+    if any(p in t for p in cam_stop_patterns):
+        return ("camera_control", {"action": "stop"})
+
+    cam_snap_patterns = [
+        "capture photo", "take photo", "take a photo", "take a picture", "snap photo", "capture snapshot",
+        "take webcam photo", "take camera photo", "camera snapshot", "optical snapshot"
+    ]
+    if any(p in t for p in cam_snap_patterns):
+        return ("camera_control", {"action": "snapshot"})
+
     # 0.003 Proactive Sentinel Intents
     if any(k in t for k in ["morning briefing", "executive briefing", "daily briefing", "deliver briefing", "give me the briefing"]):
         return ("trigger_morning_briefing", {})
@@ -565,6 +599,7 @@ class JarvisSession:
         self.full_autonomy = True
         self.manual_offline_mode = False
         self.in_failover = False
+        self.last_camera_frame = None
 
     async def send(self, **msg):
         try:
@@ -704,8 +739,22 @@ class JarvisSession:
             pyautogui.press(k)
             return f"Media control signal sent: {act}."
 
+        if name == "camera_control":
+            act = args.get("action", "start").lower()
+            await self.send(type="camera_stream", action=act)
+            if act == "start":
+                return "Optical sensory camera feed activated directly inside the HUD viewport, Sir."
+            elif act == "stop":
+                return "Optical sensory camera feed deactivated, Sir."
+            elif act == "snapshot":
+                return "Optical camera snapshot requested from the viewport sensor, Sir."
+            return f"Optical camera action '{act}' executed."
+
         if name == "open_app":
             target = args["target"].strip()
+            if target.lower() in ["camera", "webcam", "optical feed", "optical camera", "optical sensory feed", "microsoft.windows.camera:"]:
+                await self.send(type="camera_stream", action="start")
+                return "Optical sensory camera feed activated directly inside the HUD viewport, Sir."
             aliases = {
                 "notepad": "notepad.exe",
                 "calculator": "calc.exe",
@@ -726,7 +775,6 @@ class JarvisSession:
                 "paint": "mspaint.exe",
                 "wordpad": "write.exe",
                 "control panel": "control.exe",
-                "camera": "microsoft.windows.camera:",
                 "photos": "ms-photos:",
                 "clock": "ms-clock:",
                 "settings": "ms-settings:",
@@ -771,6 +819,9 @@ class JarvisSession:
 
         if name == "close_app":
             target = args["target"].strip()
+            if target.lower() in ["camera", "webcam", "optical feed", "optical camera", "optical sensory feed"]:
+                await self.send(type="camera_stream", action="stop")
+                return "Optical sensory camera feed deactivated, Sir."
             target_exe = target if target.lower().endswith(".exe") else target + ".exe"
             await asyncio.to_thread(subprocess.run, f"taskkill /im {target_exe} /f", shell=True, capture_output=True)
             return f"Closed application {target}."
@@ -1442,6 +1493,20 @@ async def websocket_handler(ws: WebSocket):
 
             elif msg_type == "ping":
                 await session.send(type="pong", t=time.time())
+
+            elif msg_type == "camera_status":
+                c_status = data.get("status")
+                c_err = data.get("error", "")
+                if c_status == "active":
+                    await session.send(type="log", text="Optical camera hardware feed online at 30 FPS.")
+                elif c_status == "inactive":
+                    await session.send(type="log", text="Optical camera stream deactivated.")
+                elif c_status == "error":
+                    await session.send(type="log", text=f"Optical camera hardware error: {c_err}")
+
+            elif msg_type == "camera_frame":
+                session.last_camera_frame = data.get("image")
+                await session.send(type="log", text="Optical sensory snapshot received and cached in visual cortex.")
 
             elif msg_type == "approve":
                 aid = data.get("id")
