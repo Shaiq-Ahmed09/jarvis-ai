@@ -1,0 +1,35 @@
+# Environment & Secret Credentials
+.env
+.env.local
+*.env
+
+# Python Virtual Environments & Packages
+.venv/
+venv/
+ENV/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# J.A.R.V.I.S. Local Databases, Vector Memory & Cached Sessions
+data/instagram_session.json
+data/jarvis.db
+data/jarvis.db-journal
+data/jarvis.db-wal
+data/chroma/
+data/audio_cache/
+data/story_*.jpg
+data/*.png
+
+# Portable Binaries & Development Tools
+tools/
+*.log
+.system_generated/
+scratch/
+test_*.py
+ui_current_render.png

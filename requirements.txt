@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+openai
+google-genai
+browser-use
+pyautogui
+pillow
+python-dotenv
+psutil
+pydantic-settings
+edge-tts
+rapidocr-onnxruntime
+opencv-python
+chromadb
+instagrapi

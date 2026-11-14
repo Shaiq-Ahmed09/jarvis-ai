@@ -1,0 +1,3511 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>J.A.R.V.I.S. // Stark Industries Mark VII</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<!-- Three.js r128 Lightweight CDN for 3D Holographic Arc Reactor Mark VII -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+:root {
+  --bg: #03080e;
+  --panel: rgba(6, 20, 32, 0.85);
+  --panel-border: rgba(0, 240, 255, 0.25);
+  --cyan: #00f0ff;
+  --cyan-glow: rgba(0, 240, 255, 0.45);
+  --blue: #0088ff;
+  --amber: #ffaa00;
+  --amber-glow: rgba(255, 170, 0, 0.45);
+  --emerald: #00ff88;
+  --red: #ff3344;
+  --txt: #e2f4f8;
+  --dim: #628a9c;
+  --font-hud: 'Orbitron', -apple-system, sans-serif;
+  --font-body: 'Rajdhani', -apple-system, sans-serif;
+  --font-mono: 'Share Tech Mono', monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  height: 100vh;
+  display: grid;
+  grid-template-columns: 330px minmax(0, 1fr) 350px;
+  background: var(--bg);
+  background-image: 
+    radial-gradient(circle at 50% 50%, rgba(0, 140, 200, 0.08) 0%, transparent 70%),
+    linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
+  background-size: 100% 100%, 30px 30px, 30px 30px;
+  color: var(--txt);
+  font-family: var(--font-body);
+  font-size: 15px;
+  overflow: hidden;
+}
+
+.hud-panel {
+  background: var(--panel);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--panel-border);
+  box-shadow: inset 0 0 25px rgba(0, 240, 255, 0.05), 0 0 20px rgba(0, 0, 0, 0.85);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.hud-panel::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; width: 12px; height: 12px;
+  border-top: 2px solid var(--cyan);
+  border-left: 2px solid var(--cyan);
+  pointer-events: none;
+}
+.hud-panel::after {
+  content: "";
+  position: absolute;
+  bottom: 0; right: 0; width: 12px; height: 12px;
+  border-bottom: 2px solid var(--cyan);
+  border-right: 2px solid var(--cyan);
+  pointer-events: none;
+}
+
+.hud-header {
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--panel-border);
+  font-family: var(--font-hud);
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: var(--cyan);
+  text-shadow: 0 0 8px var(--cyan-glow);
+}
+.hud-header .live-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--emerald);
+  box-shadow: 0 0 8px var(--emerald);
+  animation: pulse-dot 1.5s infinite;
+}
+@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* Left Column: Arc Reactor Core */
+.reactor-col {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 240, 255, 0.3) transparent;
+}
+
+.arc-container {
+  position: relative;
+  width: 250px;
+  height: 250px;
+  margin: 4px auto 6px auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 900px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, rgba(0, 240, 255, 0.05) 0%, rgba(2, 10, 20, 0.5) 60%, transparent 100%);
+  border: 1px solid rgba(0, 240, 255, 0.18);
+  box-shadow: 0 0 35px rgba(0, 0, 0, 0.8), inset 0 0 30px rgba(0, 240, 255, 0.06);
+}
+
+#arc-webgl {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  cursor: grab;
+  outline: none;
+  filter: drop-shadow(0 0 20px rgba(0, 240, 255, 0.35));
+  transition: filter 0.3s ease;
+}
+#arc-webgl:active {
+  cursor: grabbing;
+}
+
+/* Hide fallback 2D rings when 3D WebGL Arc Reactor is active */
+.arc-container.webgl-active .ring-outer,
+.arc-container.webgl-active .ring-mid,
+.arc-container.webgl-active .ring-inner,
+.arc-container.webgl-active .core-pulse {
+  display: none !important;
+}
+
+.arc-container.webgl-active .wave-bars {
+  position: absolute;
+  bottom: 8px;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0.8;
+}
+
+.ring-outer {
+  position: absolute;
+  inset: 0;
+  border: 2px dashed rgba(0, 240, 255, 0.4);
+  border-radius: 50%;
+  animation: spin-cw 24s linear infinite;
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.15);
+}
+.ring-mid {
+  position: absolute;
+  inset: 18px;
+  border: 2px solid rgba(0, 240, 255, 0.2);
+  border-top-color: var(--cyan);
+  border-bottom-color: var(--cyan);
+  border-radius: 50%;
+  animation: spin-ccw 12s linear infinite;
+}
+.ring-inner {
+  position: absolute;
+  inset: 38px;
+  border: 1px dotted rgba(0, 240, 255, 0.6);
+  border-radius: 50%;
+  animation: spin-cw 6s linear infinite;
+}
+.core-pulse {
+  position: absolute;
+  inset: 50px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffffff 0%, var(--cyan) 45%, rgba(0, 136, 255, 0.4) 75%, transparent 100%);
+  box-shadow: 0 0 30px var(--cyan), inset 0 0 15px #fff;
+  transition: all 0.3s;
+}
+
+.wave-bars {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 36px;
+  z-index: 2;
+}
+.wave-bar {
+  width: 3px;
+  height: 6px;
+  background: #fff;
+  box-shadow: 0 0 6px var(--cyan);
+  border-radius: 2px;
+  transition: height 0.05s ease;
+}
+
+.arc-container.speaking .core-pulse {
+  background: radial-gradient(circle, #fff 0%, var(--amber) 45%, rgba(255, 120, 0, 0.4) 75%, transparent 100%);
+  box-shadow: 0 0 45px var(--amber), inset 0 0 20px #fff;
+}
+.arc-container.speaking .ring-mid { border-top-color: var(--amber); border-bottom-color: var(--amber); }
+.arc-container.thinking .core-pulse { animation: core-fast-breathe 0.7s infinite alternate; }
+.arc-container.recording .ring-outer { border-color: var(--red); box-shadow: 0 0 30px var(--red); }
+.arc-container.recording .core-pulse { background: radial-gradient(circle, #fff 0%, var(--red) 45%, rgba(255, 50, 50, 0.4) 75%, transparent 100%); }
+
+@keyframes spin-cw { to { transform: rotate(360deg); } }
+@keyframes spin-ccw { to { transform: rotate(-360deg); } }
+@keyframes core-fast-breathe { from { transform: scale(0.92); opacity: 0.7; } to { transform: scale(1.08); opacity: 1; } }
+
+#status-badge {
+  font-family: var(--font-hud);
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: var(--cyan);
+  background: rgba(0, 240, 255, 0.08);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  padding: 8px 12px;
+  border-radius: 6px;
+  text-align: center;
+  width: 100%;
+  box-shadow: 0 0 16px rgba(0, 240, 255, 0.12);
+  flex-shrink: 0;
+  margin-top: 2px;
+  margin-bottom: 2px;
+  transition: all 0.3s ease;
+}
+
+.voice-controls-panel {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.vu-meter-card {
+  width: 100%;
+  background: rgba(2, 8, 16, 0.7);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 4px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.vu-header {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-hud);
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--dim);
+}
+.vu-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.vu-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--emerald) 0%, var(--cyan) 70%, var(--amber) 100%);
+  transition: width 0.04s ease-out;
+}
+
+#speech-hud {
+  width: 100%;
+  min-height: 38px;
+  background: rgba(0, 255, 136, 0.08);
+  border: 1px solid rgba(0, 255, 136, 0.3);
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--emerald);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  word-break: break-word;
+}
+#speech-hud.empty {
+  color: var(--dim);
+  border-color: rgba(0, 240, 255, 0.15);
+  background: rgba(3, 15, 26, 0.4);
+}
+#speech-hud.recording {
+  color: var(--red);
+  border-color: var(--red);
+  background: rgba(255, 50, 50, 0.1);
+  box-shadow: 0 0 15px rgba(255, 50, 50, 0.2);
+}
+#speech-hud.listening {
+  color: var(--amber);
+  border-color: var(--amber);
+  background: rgba(255, 170, 0, 0.12);
+  box-shadow: 0 0 16px rgba(255, 170, 0, 0.35);
+  animation: pulseListening 1.4s infinite ease-in-out;
+}
+@keyframes pulseListening {
+  0%, 100% { border-color: rgba(255, 170, 0, 0.4); box-shadow: 0 0 8px rgba(255, 170, 0, 0.2); }
+  50% { border-color: rgba(255, 170, 0, 0.95); box-shadow: 0 0 18px rgba(255, 170, 0, 0.5); }
+}
+
+.controls-card {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  background: rgba(3, 15, 26, 0.7);
+  border: 1px solid rgba(0, 240, 255, 0.15);
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.stark-btn {
+  background: linear-gradient(180deg, rgba(0, 240, 255, 0.18) 0%, rgba(0, 136, 255, 0.06) 100%);
+  border: 1px solid var(--cyan);
+  color: var(--txt);
+  font-family: var(--font-hud);
+  font-size: 11px;
+  letter-spacing: 1px;
+  padding: 10px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.1);
+  user-select: none;
+}
+.stark-btn:hover {
+  background: var(--cyan);
+  color: #02070d;
+  box-shadow: 0 0 18px var(--cyan);
+}
+.stark-btn.primary-mic {
+  width: 100%;
+  padding: 13px 16px;
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  font-weight: 700;
+  border-color: var(--cyan);
+  background: linear-gradient(180deg, rgba(0, 240, 255, 0.25) 0%, rgba(0, 136, 255, 0.08) 100%);
+  box-shadow: 0 0 16px rgba(0, 240, 255, 0.2);
+}
+.stark-btn.primary-mic:hover {
+  background: var(--cyan);
+  color: #02070d;
+  box-shadow: 0 0 25px var(--cyan);
+}
+.stark-btn.recording {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+  box-shadow: 0 0 25px var(--red);
+  animation: pulse-rec 1s infinite alternate;
+}
+@keyframes pulse-rec { from { opacity: 0.85; } to { opacity: 1; } }
+
+.stark-btn.danger { border-color: var(--red); color: var(--red); }
+.stark-btn.danger:hover { background: var(--red); color: #fff; }
+
+.hud-select {
+  width: 100%;
+  background: rgba(0, 240, 255, 0.05);
+  border: 1px solid rgba(0, 240, 255, 0.25);
+  color: var(--txt);
+  font-family: var(--font-body);
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  outline: none;
+}
+.hud-select option { background: #03080e; color: #fff; }
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--dim);
+}
+.toggle-row input[type="checkbox"] {
+  accent-color: var(--cyan);
+  cursor: pointer;
+  width: 15px; height: 15px;
+}
+
+/* Center Column */
+.chat-col {
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--panel-border);
+  border-right: 1px solid var(--panel-border);
+}
+
+#chat-log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.bubble {
+  max-width: 82%;
+  padding: 12px 16px;
+  border-radius: 6px;
+  font-size: 15px;
+  line-height: 1.5;
+  position: relative;
+  word-break: break-word;
+}
+.bubble.user {
+  align-self: flex-end;
+  background: rgba(0, 136, 255, 0.15);
+  border: 1px solid rgba(0, 136, 255, 0.4);
+  color: #fff;
+  border-bottom-right-radius: 1px;
+}
+.bubble.user::before {
+  content: "SIR // DIRECT COMMAND";
+  display: block;
+  font-family: var(--font-hud);
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--blue);
+  margin-bottom: 4px;
+}
+.bubble.jarvis {
+  align-self: flex-start;
+  background: rgba(0, 240, 255, 0.08);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  color: var(--txt);
+  border-bottom-left-radius: 1px;
+}
+.bubble.jarvis::before {
+  content: "J.A.R.V.I.S. // AUTONOMOUS AGENT";
+  display: block;
+  font-family: var(--font-hud);
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--cyan);
+  margin-bottom: 4px;
+}
+.bubble.error {
+  align-self: center;
+  background: rgba(255, 51, 68, 0.15);
+  border: 1px solid var(--red);
+  color: var(--red);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.approval-card {
+  align-self: center;
+  width: 90%;
+  background: rgba(255, 170, 0, 0.08);
+  border: 1px solid var(--amber);
+  border-radius: 6px;
+  padding: 14px 18px;
+  box-shadow: 0 0 20px var(--amber-glow);
+}
+.approval-card .appr-header {
+  font-family: var(--font-hud);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: var(--amber);
+  margin-bottom: 6px;
+}
+.approval-card pre {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--dim);
+  background: rgba(0, 0, 0, 0.4);
+  padding: 8px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+.approval-actions { display: flex; gap: 10px; }
+.approval-actions button {
+  flex: 1; padding: 8px; font-family: var(--font-hud); font-size: 11px; cursor: pointer; border-radius: 4px;
+}
+.appr-allow { background: var(--amber); color: #03080e; border: 1px solid var(--amber); font-weight: bold; }
+.appr-deny { background: transparent; color: var(--txt); border: 1px solid var(--dim); }
+
+.chat-input-bar {
+  padding: 14px 20px;
+  display: flex;
+  gap: 10px;
+  border-top: 1px solid var(--panel-border);
+  background: rgba(3, 10, 18, 0.9);
+}
+.hud-input {
+  flex: 1;
+  background: rgba(0, 240, 255, 0.05);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: 16px;
+  padding: 10px 16px;
+  border-radius: 4px;
+  outline: none;
+}
+.hud-input:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 15px var(--cyan-glow);
+  background: rgba(0, 240, 255, 0.1);
+}
+
+/* Right Column */
+.telemetry-col {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+}
+
+.gauge-group { display: flex; flex-direction: column; gap: 10px; }
+.gauge-card {
+  background: rgba(4, 16, 28, 0.6);
+  border: 1px solid rgba(0, 240, 255, 0.15);
+  border-radius: 6px;
+  padding: 9px 13px;
+}
+.gauge-header {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-hud);
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--dim);
+  margin-bottom: 5px;
+}
+.gauge-header span.val { color: var(--cyan); font-weight: 700; }
+.bar-track {
+  width: 100%; height: 6px; background: rgba(255, 255, 255, 0.08); border-radius: 3px; overflow: hidden;
+}
+.bar-fill {
+  height: 100%; width: 0%; background: linear-gradient(90deg, var(--blue) 0%, var(--cyan) 100%);
+  box-shadow: 0 0 8px var(--cyan); transition: width 0.4s ease;
+}
+
+.optics-box {
+  background: rgba(2, 8, 16, 0.75);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 8px;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+.optics-box.active-intel {
+  border-color: rgba(0, 240, 255, 0.6);
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.2), inset 0 0 15px rgba(0, 240, 255, 0.05);
+}
+.optics-header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 4px 6px 4px;
+  border-bottom: 1px solid rgba(0, 240, 255, 0.15);
+  margin-bottom: 6px;
+}
+.optics-tag {
+  font-family: var(--font-hud);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: var(--cyan);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.optics-pulse-beacon {
+  width: 6px;
+  height: 6px;
+  background: var(--cyan);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--cyan);
+  animation: beacon-blink 1.2s infinite ease-in-out;
+}
+@keyframes beacon-blink {
+  0%, 100% { opacity: 0.3; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.3); }
+}
+.optics-viewport-frame {
+  position: relative;
+  width: 100%;
+  min-height: 130px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.optics-viewport-frame img {
+  width: 100%;
+  max-height: 185px;
+  object-fit: contain;
+  border-radius: 3px;
+  display: block;
+  transition: transform 0.3s ease, filter 0.3s ease;
+}
+.optics-viewport-frame:hover img {
+  transform: scale(1.02);
+}
+.optics-hud-brackets .bracket-tl,
+.optics-hud-brackets .bracket-tr,
+.optics-hud-brackets .bracket-bl,
+.optics-hud-brackets .bracket-br {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-color: var(--cyan);
+  pointer-events: none;
+  z-index: 3;
+}
+.bracket-tl { top: 4px; left: 4px; border-top: 2px solid var(--cyan); border-left: 2px solid var(--cyan); }
+.bracket-tr { top: 4px; right: 4px; border-top: 2px solid var(--cyan); border-right: 2px solid var(--cyan); }
+.bracket-bl { bottom: 4px; left: 4px; border-bottom: 2px solid var(--cyan); border-left: 2px solid var(--cyan); }
+.bracket-br { bottom: 4px; right: 4px; border-bottom: 2px solid var(--cyan); border-right: 2px solid var(--cyan); }
+
+.optics-scanlines {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 240, 255, 0.04) 50%);
+  background-size: 100% 4px;
+  pointer-events: none;
+  z-index: 2;
+}
+.optics-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px 0;
+}
+.placeholder-crosshair {
+  width: 32px;
+  height: 32px;
+  border: 1px dashed rgba(0, 240, 255, 0.3);
+  border-radius: 50%;
+  position: relative;
+}
+.placeholder-crosshair::before {
+  content: '';
+  position: absolute;
+  top: 50%; left: 20%; right: 20%; height: 1px;
+  background: rgba(0, 240, 255, 0.4);
+}
+.placeholder-crosshair::after {
+  content: '';
+  position: absolute;
+  left: 50%; top: 20%; bottom: 20%; width: 1px;
+  background: rgba(0, 240, 255, 0.4);
+}
+.optics-label { font-family: var(--font-mono); font-size: 11px; color: var(--dim); margin-top: 6px; }
+.optics-intel-info {
+  margin-top: 6px;
+  padding: 5px 8px;
+  background: rgba(0, 240, 255, 0.05);
+  border: 1px solid rgba(0, 240, 255, 0.15);
+  border-radius: 4px;
+}
+.optics-title {
+  font-family: var(--font-hud);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--cyan);
+  letter-spacing: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.optics-caption {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--dim);
+  line-height: 1.35;
+  margin-top: 3px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Antigravity Directive Cards */
+.agy-card {
+  background: rgba(4, 18, 32, 0.85);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  border-radius: 6px;
+  padding: 10px;
+  margin: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.1);
+}
+.agy-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-hud);
+  font-size: 11px;
+  color: var(--cyan);
+  letter-spacing: 1px;
+}
+.agy-card-cmd {
+  background: rgba(0, 240, 255, 0.2);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 700;
+  color: #fff;
+  font-family: var(--font-mono);
+}
+.agy-card-body {
+  background: rgba(1, 6, 12, 0.9);
+  border: 1px solid rgba(0, 240, 255, 0.15);
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #c0e8f5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 180px;
+  overflow-y: auto;
+  line-height: 1.4;
+}
+.agy-card-btn {
+  background: rgba(0, 240, 255, 0.15);
+  border: 1px solid var(--cyan);
+  color: var(--cyan);
+  font-family: var(--font-hud);
+  font-size: 10px;
+  letter-spacing: 1px;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  align-self: flex-start;
+  transition: all 0.2s ease;
+}
+.agy-card-btn:hover {
+  background: var(--cyan);
+  color: #000;
+  box-shadow: 0 0 12px var(--cyan);
+}
+.agy-card-btn.copied {
+  background: var(--emerald);
+  border-color: var(--emerald);
+  color: #000;
+}
+
+.diag-console {
+  flex: 1;
+  background: rgba(2, 6, 12, 0.85);
+  border: 1px solid rgba(0, 240, 255, 0.15);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--dim);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  max-height: 200px;
+}
+.diag-console .log-line { word-break: break-all; }
+.diag-console .log-line::before { content: "> "; color: var(--cyan); }
+
+/* Memory Drawer */
+#memory-drawer {
+  position: fixed; top: 0; right: -460px; width: 440px; height: 100vh;
+  background: rgba(4, 12, 22, 0.97); backdrop-filter: blur(24px);
+  border-left: 2px solid var(--cyan); box-shadow: -12px 0 35px rgba(0, 0, 0, 0.95);
+  transition: right 0.35s cubic-bezier(0.16, 1, 0.3, 1); z-index: 100;
+  display: flex; flex-direction: column; padding: 20px; gap: 14px;
+}
+#memory-drawer.open { right: 0; }
+.drawer-header {
+  display: flex; align-items: center; justify-content: space-between;
+  font-family: var(--font-hud); font-size: 14px; letter-spacing: 2px; color: var(--cyan);
+  border-bottom: 1px solid var(--panel-border); padding-bottom: 12px;
+}
+.drawer-header-left { display: flex; align-items: center; gap: 10px; }
+.cortex-badge {
+  font-family: var(--font-mono); font-size: 10px; padding: 2px 6px; border-radius: 3px;
+  background: rgba(0, 240, 255, 0.15); border: 1px solid var(--cyan); color: var(--cyan);
+  letter-spacing: 1px;
+}
+.drawer-close { background: transparent; border: none; color: var(--dim); font-size: 22px; cursor: pointer; transition: color 0.2s; }
+.drawer-close:hover { color: var(--red); }
+
+.memory-search-bar {
+  display: flex; gap: 8px; position: relative;
+}
+.memory-search-input {
+  flex: 1; background: rgba(0, 240, 255, 0.05); border: 1px solid rgba(0, 240, 255, 0.25);
+  color: var(--fg); font-family: var(--font-ui); font-size: 12px; padding: 7px 12px;
+  border-radius: 4px; outline: none; transition: border-color 0.2s;
+}
+.memory-search-input:focus { border-color: var(--cyan); box-shadow: 0 0 10px rgba(0, 240, 255, 0.2); }
+
+.cortex-filter-pills {
+  display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px;
+}
+.cortex-pill {
+  font-family: var(--font-mono); font-size: 10px; padding: 3px 8px; border-radius: 3px;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--dim); cursor: pointer; white-space: nowrap; transition: all 0.2s;
+}
+.cortex-pill.active, .cortex-pill:hover {
+  background: rgba(0, 240, 255, 0.15); border-color: var(--cyan); color: var(--cyan);
+}
+
+#memory-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px; }
+.memory-card {
+  background: rgba(10, 25, 45, 0.7); border: 1px solid rgba(0, 240, 255, 0.18);
+  border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 8px;
+  transition: all 0.2s; position: relative;
+}
+.memory-card:hover {
+  border-color: rgba(0, 240, 255, 0.45); background: rgba(10, 25, 45, 0.9);
+  box-shadow: 0 4px 15px rgba(0, 240, 255, 0.1);
+}
+.memory-card-header {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.mem-cat-badge {
+  font-family: var(--font-mono); font-size: 9px; font-weight: 700; padding: 2px 6px;
+  border-radius: 3px; letter-spacing: 1px; text-transform: uppercase;
+}
+.mem-cat-badge.preference { background: rgba(0, 240, 255, 0.15); border: 1px solid var(--cyan); color: var(--cyan); }
+.mem-cat-badge.workflow { background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; color: #f59e0b; }
+.mem-cat-badge.project_note { background: rgba(168, 85, 247, 0.15); border: 1px solid #a855f7; color: #a855f7; }
+.mem-cat-badge.identity { background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #10b981; }
+
+.mem-text { font-size: 13px; color: var(--fg); line-height: 1.4; word-break: break-word; }
+
+.memory-card-footer {
+  display: flex; align-items: center; justify-content: space-between; font-family: var(--font-mono);
+  font-size: 10px; color: var(--dim); border-top: 1px solid rgba(255, 255, 255, 0.05); padding-top: 6px; margin-top: 2px;
+}
+.mem-conf-tag {
+  display: inline-flex; align-items: center; gap: 4px; color: var(--emerald); font-weight: bold;
+}
+.mem-conf-tag::before {
+  content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--emerald); box-shadow: 0 0 6px var(--emerald);
+}
+.memory-del {
+  background: transparent; border: none; color: var(--dim); cursor: pointer; font-size: 15px; line-height: 1; padding: 2px 4px;
+  transition: color 0.2s;
+}
+.memory-del:hover { color: var(--red); }
+
+.memory-add-box {
+  display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--panel-border); padding-top: 12px;
+}
+.mem-add-row {
+  display: flex; gap: 8px;
+}
+.mem-cat-select {
+  background: rgba(0, 240, 255, 0.06); border: 1px solid rgba(0, 240, 255, 0.25);
+  color: var(--cyan); font-family: var(--font-mono); font-size: 11px; padding: 6px 8px;
+  border-radius: 4px; outline: none; cursor: pointer;
+}
+
+/* Sparkline Canvas */
+.sparkline-card {
+  background: rgba(4, 16, 28, 0.7);
+  border: 1px solid rgba(0, 240, 255, 0.18);
+  border-radius: 6px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sparkline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-hud);
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--dim);
+}
+.sparkline-rate { color: var(--emerald); font-weight: bold; font-family: var(--font-mono); }
+#cpu-sparkline {
+  width: 100%;
+  height: 50px;
+  border-radius: 3px;
+  background: rgba(1, 6, 12, 0.6);
+  border: 1px solid rgba(0, 240, 255, 0.1);
+}
+
+/* Reactor Stats Bar */
+.reactor-stats-bar {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  background: rgba(2, 10, 20, 0.85);
+  border: 1px solid rgba(0, 240, 255, 0.22);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  box-shadow: inset 0 0 15px rgba(0, 240, 255, 0.04);
+}
+.r-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.r-stat-label {
+  font-family: var(--font-hud);
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: var(--dim);
+}
+.r-stat-val {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--cyan);
+}
+
+/* Optics Toolbar & Interactive Reticle */
+.optics-toolbar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.stark-btn.mini {
+  padding: 3px 8px;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+}
+.optics-coords-overlay {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  background: rgba(0, 10, 20, 0.85);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--cyan);
+  padding: 2px 6px;
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 5;
+  display: none;
+}
+.optics-viewport-frame:hover .optics-coords-overlay {
+  display: block;
+}
+
+/* Suggestion Chips */
+.suggestion-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  align-self: flex-start;
+}
+.chip-btn {
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--cyan);
+  background: rgba(0, 240, 255, 0.08);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  border-radius: 12px;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.chip-btn:hover {
+  background: rgba(0, 240, 255, 0.25);
+  border-color: var(--cyan);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+/* Holographic Lightbox Modal */
+#optics-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(1, 6, 12, 0.92);
+  backdrop-filter: blur(12px);
+  z-index: 1000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 30px;
+  cursor: zoom-out;
+}
+#optics-modal.open {
+  display: flex;
+}
+.optics-modal-content {
+  position: relative;
+  max-width: 92vw;
+  max-height: 90vh;
+  border: 1px solid var(--cyan);
+  box-shadow: 0 0 35px rgba(0, 240, 255, 0.4);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  cursor: default;
+}
+.optics-modal-content img {
+  display: block;
+  max-width: 100%;
+  max-height: 82vh;
+  object-fit: contain;
+}
+.optics-modal-bar {
+  padding: 8px 14px;
+  background: rgba(3, 14, 26, 0.95);
+  border-top: 1px solid var(--panel-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-hud);
+  font-size: 11px;
+  color: var(--cyan);
+}
+
+/* Arc shockwave animation on repulsor click */
+@keyframes arc-shockwave {
+  0% { transform: scale(1); filter: drop-shadow(0 0 10px var(--cyan-glow)); }
+  50% { transform: scale(1.05); filter: drop-shadow(0 0 35px var(--cyan)) brightness(1.3); }
+  100% { transform: scale(1); filter: drop-shadow(0 0 10px var(--cyan-glow)); }
+}
+.arc-shockwave-active {
+  animation: arc-shockwave 0.45s ease-out;
+}
+
+@media (max-width: 1050px) {
+  body { grid-template-columns: 1fr; height: auto; overflow-y: auto; }
+  .telemetry-col, .reactor-col { min-height: 380px; }
+  #chat-log { min-height: 50vh; }
+}
+</style>
+</head>
+<body>
+
+<!-- Left: Reactor & Voice Core -->
+<section class="hud-panel reactor-col">
+  <div class="hud-header" style="width: 100%; border-bottom: 1px solid var(--panel-border); padding: 8px 12px; margin-bottom: 2px;">
+    <span>NEURAL CORE // STARK MK-VII</span>
+    <span class="live-dot"></span>
+  </div>
+
+  <!-- 3D Arc Reactor Hologram Viewport -->
+  <div class="arc-container" id="arc" title="Stark Mark VII Arc Reactor (Click for repulsor shockwave, drag to tilt)">
+    <div class="ring-outer"></div>
+    <div class="ring-mid"></div>
+    <div class="ring-inner"></div>
+    <div class="core-pulse"></div>
+    <div class="wave-bars" id="wave-bars"></div>
+  </div>
+
+  <!-- Status Badge shifted down with breathing space -->
+  <div id="status-badge">SYSTEM NOMINAL // STANDBY</div>
+
+  <!-- Reactor Live Dynamic Stats -->
+  <div class="reactor-stats-bar">
+    <div class="r-stat">
+      <span class="r-stat-label">OUTPUT</span>
+      <span class="r-stat-val" id="r-output-val">3.21 GJ/s</span>
+    </div>
+    <div class="r-stat">
+      <span class="r-stat-label">FREQUENCY</span>
+      <span class="r-stat-val" id="r-freq-val">432 HZ</span>
+    </div>
+    <div class="r-stat">
+      <span class="r-stat-label">STABILITY</span>
+      <span class="r-stat-val" id="r-stab-val">99.8%</span>
+    </div>
+  </div>
+
+  <!-- Acoustic & Vocal Speech Controls shifted down -->
+  <div class="voice-controls-panel">
+    <div class="vu-meter-card">
+      <div class="vu-header">
+        <span>ACOUSTIC SIGNAL (INPUT)</span>
+        <span id="vu-db" style="color: var(--emerald);">0% LEVEL</span>
+      </div>
+      <div class="vu-track"><div class="vu-fill" id="vu-fill"></div></div>
+    </div>
+
+    <div id="speech-hud" class="empty">
+      <span id="speech-hud-text" style="color: var(--emerald); font-weight: bold;">🟢 ALWAYS-ON MIC ACTIVE // SAY "JARVIS"</span>
+    </div>
+
+    <button class="stark-btn primary-mic" id="mic-btn">
+      <span id="mic-icon">🎙</span> <span id="mic-label">CLICK OR HOLD TO SPEAK</span>
+    </button>
+    <button class="stark-btn danger" id="stop-btn" style="display: none;">
+      ABORT CURRENT TASK
+    </button>
+
+    <div class="controls-card">
+      <div class="toggle-row">
+        <label for="autonomy-toggle" style="color: var(--cyan); font-weight: 600;">Hands-On Full Autonomy</label>
+        <input type="checkbox" id="autonomy-toggle" checked>
+      </div>
+
+      <div class="toggle-row">
+        <label for="tts-toggle">Neural Vocal Speech (TTS)</label>
+        <input type="checkbox" id="tts-toggle" checked>
+      </div>
+
+      <div class="toggle-row">
+        <label for="wake-toggle" style="color: var(--emerald); font-weight: 600;">🟢 Always-On Mic ("Jarvis")</label>
+        <input type="checkbox" id="wake-toggle" checked>
+      </div>
+
+      <div class="toggle-row">
+        <label for="offline-toggle" style="color: var(--amber); font-weight: 600;">Offline Local Failover (Ollama)</label>
+        <input type="checkbox" id="offline-toggle">
+      </div>
+
+      <div class="toggle-row" style="font-size: 11px;">
+        <span style="color: var(--dim);">Acoustic Gain Sensitivity</span>
+        <span style="color: var(--emerald); font-family: var(--font-mono); font-weight: bold;">2.5x BOOST (VAD ACTIVE)</span>
+      </div>
+
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px;">
+        <label for="audio-device-select" style="font-size: 10px; color: var(--dim); letter-spacing: 1px;">MICROPHONE HARDWARE</label>
+        <button type="button" class="stark-btn mini" style="padding: 2px 7px; font-size: 9px;" onclick="refreshAudioDevices(true)" title="Rescan connected microphones">🔄 SCAN</button>
+      </div>
+      <select id="audio-device-select" class="hud-select" style="margin-top: 4px;">
+        <option value="">Default System Microphone</option>
+      </select>
+    </div>
+  </div>
+</section>
+
+<!-- Center: Holographic HUD Chat Feed -->
+<section class="hud-panel chat-col">
+  <div class="hud-header">
+    <span>J.A.R.V.I.S. // FULL HANDS-ON PC INTERFACE</span>
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <button class="stark-btn mini" id="sfx-toggle-btn" onclick="toggleSFX()" title="Synthesized Cybernetic Sound FX">🔊 SFX: ON</button>
+      <button class="stark-btn mini" onclick="clearChatLog()" title="Clear Chat Stream">🧹 CLEAR</button>
+      <button class="stark-btn mini" onclick="openMemoryDrawer()" title="Open Persistent Vector Memory Cortex">🧠 CORTEX</button>
+      <span style="font-family: var(--font-mono); font-size: 10px; color: var(--emerald);" id="auth-status-tag">AUTONOMY: MAXIMUM</span>
+    </div>
+  </div>
+
+  <div id="chat-log">
+    <div class="bubble jarvis">
+      Good day, Sir. J.A.R.V.I.S. is online with full hands-on control over this workstation. You may command me by voice (hold Spacebar) or text. What task shall we tackle?
+    </div>
+  </div>
+
+  <form class="chat-input-bar" id="chat-form">
+    <input type="text" class="hud-input" id="chat-input" placeholder="Give J.A.R.V.I.S. any command (e.g. 'Open Chrome', 'Type a note', 'Change volume')..." autocomplete="off">
+    <button type="submit" class="stark-btn" style="padding: 10px 20px;">TRANSMIT</button>
+  </form>
+</section>
+
+<!-- Right: Telemetry & Optics Feed -->
+<section class="hud-panel telemetry-col">
+  <div class="hud-header" style="border-bottom: none; padding: 0;">
+    <span>SYSTEM TELEMETRY</span>
+    <span id="clock" style="font-family: var(--font-mono); color: var(--cyan);">00:00:00</span>
+  </div>
+
+  <div class="gauge-group">
+    <div class="gauge-card">
+      <div class="gauge-header">
+        <span>PROCESSOR MATRIX (CPU)</span>
+        <span class="val" id="cpu-val">0%</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" id="cpu-bar"></div></div>
+    </div>
+
+    <div class="gauge-card">
+      <div class="gauge-header">
+        <span>MEMORY BUFFER (RAM)</span>
+        <span class="val" id="ram-val">0%</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" id="ram-bar"></div></div>
+    </div>
+
+    <div class="gauge-card">
+      <div class="gauge-header">
+        <span>LOCAL DISK (C:)</span>
+        <span class="val" id="disk-val">0%</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" id="disk-bar" style="background: linear-gradient(90deg, #0088ff, var(--cyan));"></div></div>
+    </div>
+
+    <div class="gauge-card">
+      <div class="gauge-header">
+        <span>ENERGY CELL (BATTERY)</span>
+        <span class="val" id="batt-val">100%</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" id="batt-bar" style="background: linear-gradient(90deg, #00bb66, var(--emerald));"></div></div>
+    </div>
+  </div>
+
+  <!-- CPU Sparkline Spectrum -->
+  <div class="sparkline-card">
+    <div class="sparkline-header">
+      <span>CPU LOAD SPECTRUM (HISTOGRAM)</span>
+      <span class="sparkline-rate" id="sparkline-hz">10 Hz</span>
+    </div>
+    <canvas id="cpu-sparkline" width="310" height="50"></canvas>
+  </div>
+
+  <span class="protocols-label">OPTICAL SENSORY VIEWPORT</span>
+  <div class="optics-toolbar">
+    <button class="stark-btn mini" onclick="quickAction('Take a screenshot with coordinate grid and inspect the display.')" title="Take instantaneous screenshot">📸 SNAP</button>
+    <button class="stark-btn mini" onclick="quickAction('Perform an optical neural scan of the display and detect all interactive buttons and elements.')" title="Optical neural text & element scan">👁️ SCAN</button>
+    <button class="stark-btn mini" onclick="quickAction('Show desktop')" title="Minimize windows & show desktop">🖥️ DESKTOP</button>
+  </div>
+  <div class="optics-box" id="optics-box">
+    <div class="optics-header-bar" id="optics-header-bar" style="display: none;">
+      <span class="optics-tag" id="optics-tag">TARGET INTEL</span>
+      <span class="optics-pulse-beacon"></span>
+    </div>
+    <div class="optics-viewport-frame" id="optics-viewport-frame" onclick="openOpticsModal()">
+      <img id="optics-img" style="display: none; cursor: zoom-in;" referrerpolicy="no-referrer" alt="Optical sensory feed" title="Click to enlarge in holographic lightbox">
+      <div class="optics-hud-brackets">
+        <span class="bracket-tl"></span><span class="bracket-tr"></span>
+        <span class="bracket-bl"></span><span class="bracket-br"></span>
+      </div>
+      <div class="optics-scanlines"></div>
+      <div class="optics-coords-overlay" id="optics-coords">LOC: 0, 0</div>
+      <div id="optics-placeholder" class="optics-placeholder">
+        <div class="placeholder-crosshair"></div>
+        <span class="optics-label" id="optics-label">NO ACTIVE OPTICAL STREAM</span>
+      </div>
+    </div>
+    <div class="optics-intel-info" id="optics-intel-info" style="display: none;">
+      <div class="optics-title" id="optics-title"></div>
+      <div class="optics-caption" id="optics-caption"></div>
+    </div>
+  </div>
+
+  <span class="protocols-label">DIAGNOSTIC EVENT LOG</span>
+  <div class="diag-console" id="diag-console">
+    <div class="log-line">Full hands-on execution authority verified.</div>
+    <div class="log-line">J.A.R.V.I.S. Core online (Edge-TTS Neural Voice + Gemini Flash).</div>
+  </div>
+</section>
+
+<!-- Holographic Lightbox Modal for Optics Inspection -->
+<div id="optics-modal" onclick="closeOpticsModal()">
+  <div class="optics-modal-content" onclick="event.stopPropagation()">
+    <img id="optics-modal-img" src="" alt="Expanded Optical Viewport">
+    <div class="optics-modal-bar">
+      <span id="optics-modal-label">HOLOGRAPHIC OPTICAL INTEL // HIGH RESOLUTION</span>
+      <button class="stark-btn mini" onclick="closeOpticsModal()">CLOSE &times;</button>
+    </div>
+  </div>
+</div>
+
+<!-- Slide-out Memory Cortex Drawer -->
+<div id="memory-drawer">
+  <div class="drawer-header">
+    <div class="drawer-header-left">
+      <span>VECTOR MEMORY CORTEX</span>
+      <span class="cortex-badge" id="cortex-count-badge">0 VECTORS</span>
+    </div>
+    <button class="drawer-close" onclick="closeMemoryDrawer()" title="Close Drawer">&times;</button>
+  </div>
+  
+  <div class="memory-search-bar">
+    <input type="text" id="memory-search-input" class="memory-search-input" placeholder="Semantic search cortex... (e.g. 'Brave', 'Radon', 'theme')" oninput="onMemorySearchInput(this.value)">
+  </div>
+
+  <div class="cortex-filter-pills">
+    <div class="cortex-pill active" onclick="setMemoryFilter('all', this)">ALL</div>
+    <div class="cortex-pill" onclick="setMemoryFilter('preference', this)">PREFERENCES</div>
+    <div class="cortex-pill" onclick="setMemoryFilter('workflow', this)">WORKFLOWS</div>
+    <div class="cortex-pill" onclick="setMemoryFilter('project_note', this)">PROJECT NOTES</div>
+    <div class="cortex-pill" onclick="setMemoryFilter('identity', this)">IDENTITY</div>
+  </div>
+
+  <div id="memory-list"></div>
+
+  <div class="memory-add-box">
+    <div class="mem-add-row">
+      <select id="new-mem-cat" class="mem-cat-select">
+        <option value="preference">Preference</option>
+        <option value="workflow">Workflow</option>
+        <option value="project_note">Project Note</option>
+        <option value="identity">Identity</option>
+      </select>
+      <input type="text" id="new-mem-input" class="hud-input" placeholder="Commit durable fact..." style="font-size: 12px; padding: 7px 10px; flex: 1;" onkeydown="if(event.key==='Enter')addMemoryManual()">
+      <button class="stark-btn" onclick="addMemoryManual()" style="padding: 7px 12px; font-size: 11px;">COMMIT</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+let ws = null;
+let wsReconnectTimer = null;
+let wsPingInterval = null;
+let isFirstConnect = true;
+let state = 'idle', isRecording = false;
+let currentMemories = [];
+let currentAudioPlayer = null;
+
+// MediaRecorder + AudioContext for Direct Native Voice Processing
+let audioStream = null;
+let audioContext = null;
+let analyser = null;
+let gainNode = null;
+let biquadFilter = null;
+let processedStream = null;
+let mediaRecorder = null;
+let audioChunks = [];
+let vuInterval = null;
+let speechRecognizer = null;
+let wakeWordActive = true;
+let isSpeechRecognizing = false;
+let wakeRestartTimer = null;
+let vadCheckInterval = null;
+let lastSpeechTime = Date.now();
+
+// Hands-free acoustic sentinel wake-word & follow-up tracking
+let isAwaitingVoiceCommand = false;
+let voiceCommandDebounceTimer = null;
+let wakeWordPendingTimer = null;
+let followUpTimeoutTimer = null;
+let lastTranscribedCommand = "";
+let lastExecutedCommand = "";
+let lastExecutedTime = 0;
+
+// Persistent Neural Voice Player & Web Audio API Routing for 3D Arc Reactor
+let ttsAudio = new Audio();
+ttsAudio.crossOrigin = "anonymous";
+let ttsAudioContext = null;
+let ttsAnalyser = null;
+let ttsSource = null;
+
+function getTTSAnalyser() {
+  if (!ttsAudioContext) {
+    try {
+      ttsAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+      ttsAnalyser = ttsAudioContext.createAnalyser();
+      ttsAnalyser.fftSize = 64;
+      ttsAnalyser.smoothingTimeConstant = 0.35;
+      ttsSource = ttsAudioContext.createMediaElementSource(ttsAudio);
+      ttsSource.connect(ttsAnalyser);
+      ttsAnalyser.connect(ttsAudioContext.destination);
+    } catch(e) {
+      console.warn("TTS Web Audio routing notice:", e);
+    }
+  }
+  if (ttsAudioContext && ttsAudioContext.state === 'suspended') {
+    ttsAudioContext.resume().catch(() => {});
+  }
+  return ttsAnalyser;
+}
+
+let sfxEnabled = true;
+function toggleSFX() {
+  sfxEnabled = !sfxEnabled;
+  const btn = $('#sfx-toggle-btn');
+  if (btn) {
+    btn.textContent = sfxEnabled ? '🔊 SFX: ON' : '🔇 SFX: OFF';
+    btn.style.color = sfxEnabled ? 'var(--cyan)' : 'var(--dim)';
+  }
+  if (sfxEnabled) playSound('chime');
+}
+
+let sfxCtx = null;
+function playSound(type) {
+  if (!sfxEnabled) return;
+  try {
+    if (!sfxCtx) sfxCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (sfxCtx.state === 'suspended') sfxCtx.resume().catch(() => {});
+    const osc = sfxCtx.createOscillator();
+    const gain = sfxCtx.createGain();
+    osc.connect(gain); gain.connect(sfxCtx.destination);
+    const now = sfxCtx.currentTime;
+
+    if (type === 'beep') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.exponentialRampToValueAtTime(1760, now + 0.1);
+      gain.gain.setValueAtTime(0.08, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+      osc.start(now); osc.stop(now + 0.1);
+    } else if (type === 'chime') {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(587.33, now);
+      osc.frequency.setValueAtTime(880, now + 0.08);
+      gain.gain.setValueAtTime(0.1, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      osc.start(now); osc.stop(now + 0.35);
+    } else if (type === 'click') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1200, now);
+      gain.gain.setValueAtTime(0.04, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+      osc.start(now); osc.stop(now + 0.04);
+    } else if (type === 'pulse') {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(140, now);
+      osc.frequency.exponentialRampToValueAtTime(32, now + 0.35);
+      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      osc.start(now); osc.stop(now + 0.35);
+    } else if (type === 'powerup') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(220, now);
+      osc.frequency.exponentialRampToValueAtTime(880, now + 0.28);
+      gain.gain.setValueAtTime(0.09, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+      osc.start(now); osc.stop(now + 0.28);
+    } else if (type === 'sonar') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1400, now);
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+      osc.start(now); osc.stop(now + 0.5);
+    }
+  } catch(e) {}
+}
+
+const waveContainer = $('#wave-bars');
+for (let i = 0; i < 9; i++) {
+  const b = document.createElement('div');
+  b.className = 'wave-bar';
+  waveContainer.appendChild(b);
+}
+
+let currentMicDeviceId = localStorage.getItem('jarvis_preferred_mic') || 'default';
+let currentMicLabel = "Default System Microphone";
+
+async function updateAudioDevices(selectedId = null) {
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const select = $('#audio-device-select');
+    if (!select) return;
+    const audioInputs = devices.filter(d => d.kind === 'audioinput');
+    if (audioInputs.length > 0) {
+      const activeId = selectedId || currentMicDeviceId || select.value || localStorage.getItem('jarvis_preferred_mic');
+      select.innerHTML = '';
+
+      audioInputs.forEach((d, i) => {
+        const opt = document.createElement('option');
+        opt.value = d.deviceId;
+        opt.textContent = d.label || `Microphone ${i + 1}`;
+        if (activeId && (d.deviceId === activeId || (activeId === 'default' && d.deviceId === 'default'))) {
+          opt.selected = true;
+        }
+        select.appendChild(opt);
+      });
+
+      if (activeId && Array.from(select.options).some(o => o.value === activeId)) {
+        select.value = activeId;
+      } else if (select.options.length > 0) {
+        currentMicDeviceId = select.options[0].value;
+      }
+    }
+  } catch(e) {
+    console.warn("Failed to enumerate audio devices:", e);
+  }
+}
+
+async function updateLabelsOnly() {
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const select = $('#audio-device-select');
+    if (!select) return;
+    const audioInputs = devices.filter(d => d.kind === 'audioinput');
+    Array.from(select.options).forEach(opt => {
+      const match = audioInputs.find(d => d.deviceId === opt.value);
+      if (match && match.label) {
+        opt.textContent = match.label;
+      }
+    });
+  } catch(e) {}
+}
+
+async function refreshAudioDevices(announce = false) {
+  await updateAudioDevices(currentMicDeviceId);
+  if (announce) {
+    playSound('click');
+    const count = $('#audio-device-select')?.options?.length || 0;
+    appendDiagLog(`Hardware scan complete: ${count} audio input device(s) detected.`);
+  }
+}
+
+if (navigator.mediaDevices) {
+  if (typeof navigator.mediaDevices.addEventListener === 'function') {
+    navigator.mediaDevices.addEventListener('devicechange', () => {
+      refreshAudioDevices(false);
+    });
+  } else if ('ondevicechange' in navigator.mediaDevices) {
+    navigator.mediaDevices.ondevicechange = () => refreshAudioDevices(false);
+  }
+}
+
+async function initMicStream(deviceId = null) {
+  try {
+    const targetDeviceId = deviceId || currentMicDeviceId || $('#audio-device-select')?.value || localStorage.getItem('jarvis_preferred_mic');
+
+    // 1. Release previous audio hardware tracks cleanly
+    if (audioStream) {
+      try {
+        audioStream.getTracks().forEach(t => t.stop());
+      } catch(e) {}
+      audioStream = null;
+    }
+
+    // 2. Build WebRTC audio constraints: enforce EXACT hardware switch
+    let stream = null;
+    if (targetDeviceId && targetDeviceId !== 'default' && targetDeviceId !== '') {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            deviceId: { exact: targetDeviceId },
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
+        });
+      } catch (err1) {
+        console.warn("Exact with DSP failed, trying raw exact deviceId:", err1);
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: { deviceId: { exact: targetDeviceId } }
+          });
+        } catch (err2) {
+          console.warn("Raw exact failed, trying ideal:", err2);
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: { deviceId: { ideal: targetDeviceId } }
+          });
+        }
+      }
+    } else {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
+    }
+
+    audioStream = stream;
+    const track = audioStream.getAudioTracks()[0];
+    currentMicDeviceId = targetDeviceId || 'default';
+    currentMicLabel = track.label || "System Microphone";
+
+    if (currentMicDeviceId) {
+      localStorage.setItem('jarvis_preferred_mic', currentMicDeviceId);
+    }
+
+    // 3. Prevent hitting Chrome/Edge 6 AudioContext hardware limit
+    if (audioContext && audioContext.state !== 'closed') {
+      try {
+        await audioContext.close();
+      } catch(e) {}
+    }
+
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioContext.state === 'suspended') {
+      await audioContext.resume();
+    }
+
+    // High-pass filter at 85Hz to cut physical handling & table rumble
+    biquadFilter = audioContext.createBiquadFilter();
+    biquadFilter.type = 'highpass';
+    biquadFilter.frequency.value = 85;
+
+    // Acoustic Pre-Amplification Gain Node (2.5x sensitivity boost)
+    gainNode = audioContext.createGain();
+    gainNode.gain.value = 2.5;
+
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 64;
+    analyser.smoothingTimeConstant = 0.3;
+
+    const source = audioContext.createMediaStreamSource(audioStream);
+    source.connect(biquadFilter);
+    biquadFilter.connect(gainNode);
+    gainNode.connect(analyser);
+
+    // Audio stream destination for boosted, low-noise MediaRecorder input
+    const dest = audioContext.createMediaStreamDestination();
+    gainNode.connect(dest);
+    processedStream = dest.stream;
+
+    startVUMeter();
+
+    // Fill in friendly device labels if they were blank before permission
+    await updateLabelsOnly();
+
+    const select = $('#audio-device-select');
+    if (select && currentMicDeviceId) {
+      select.value = currentMicDeviceId;
+    }
+
+    appendDiagLog(`Microphone active: ${currentMicLabel} (2.5x Gain Boost + VAD active)`);
+    $('#speech-hud').className = '';
+    updateMicHUDIndicator(true);
+    return true;
+  } catch (err) {
+    appendDiagLog(`Microphone error: ${err.message}`);
+    $('#speech-hud-text').textContent = '⚠️ Mic access blocked. Allow in browser address bar.';
+    $('#speech-hud').className = 'error';
+    return false;
+  }
+}
+
+function startVUMeter() {
+  if (vuInterval) clearInterval(vuInterval);
+  const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+  vuInterval = setInterval(() => {
+    if (!analyser) return;
+    analyser.getByteFrequencyData(dataArray);
+
+    let sum = 0;
+    for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+    const avg = sum / dataArray.length;
+    const pct = Math.min(100, Math.round((avg / 128) * 100));
+
+    $('#vu-fill').style.width = `${pct}%`;
+    $('#vu-db').textContent = `${pct}% LEVEL`;
+
+    const isNeuralSpeaking = currentAudioPlayer && !currentAudioPlayer.paused;
+    const bars = document.querySelectorAll('.wave-bar');
+    bars.forEach((b, i) => {
+      if (isNeuralSpeaking) {
+        if (ttsAnalyser) {
+          const ttsData = new Uint8Array(ttsAnalyser.frequencyBinCount);
+          ttsAnalyser.getByteFrequencyData(ttsData);
+          const val = ttsData[i % ttsData.length] || 15;
+          const h = Math.max(6, Math.min(32, Math.round((val / 255) * 32)));
+          b.style.height = `${h}px`;
+        } else {
+          b.style.height = `${Math.floor(Math.random() * 26) + 8}px`;
+        }
+        b.style.background = 'var(--amber)';
+      } else if (isRecording) {
+        const val = dataArray[i % dataArray.length] || 10;
+        const h = Math.max(6, Math.min(32, Math.round((val / 255) * 32)));
+        b.style.height = `${h}px`;
+        b.style.background = 'var(--red)';
+      } else if (state === 'thinking') {
+        b.style.height = `${8 + Math.sin(Date.now() / 150 + i) * 6}px`;
+        b.style.background = 'var(--cyan)';
+      } else {
+        const val = dataArray[i % dataArray.length] || 10;
+        const h = Math.max(4, Math.round((val / 255) * 20));
+        b.style.height = `${h}px`;
+        b.style.background = 'var(--emerald)';
+      }
+    });
+  }, 45);
+}
+
+$('#audio-device-select').onchange = async e => {
+  const newDeviceId = e.target.value;
+  if (!newDeviceId) return;
+  playSound('click');
+  appendDiagLog(`Switching microphone input to hardware ID: ${newDeviceId.slice(0, 12)}...`);
+  const success = await initMicStream(newDeviceId);
+  if (success) {
+    playSound('beep');
+    appendDiagLog(`Active microphone switched to: ${currentMicLabel}`);
+  }
+};
+
+// Autonomy Toggle Handler
+$('#autonomy-toggle').onchange = e => {
+  const isFull = e.target.checked;
+  sendWS({ type: 'set_autonomy', enabled: isFull });
+  $('#auth-status-tag').textContent = isFull ? 'AUTONOMY: MAXIMUM' : 'AUTONOMY: RESTRICTED';
+  $('#auth-status-tag').style.color = isFull ? 'var(--emerald)' : 'var(--amber)';
+  playSound('click');
+};
+
+$('#wake-toggle').onchange = e => {
+  wakeWordActive = e.target.checked;
+  if (wakeWordActive) {
+    if (!speechRecognizer) initWakeWordListener();
+    else safeStartSpeechRecognition();
+    updateMicHUDIndicator(true);
+    appendDiagLog("Always-On Wake-Word detection enabled ('Jarvis').");
+  } else {
+    safeStopSpeechRecognition();
+    updateMicHUDIndicator(false);
+    appendDiagLog("Always-On Wake-Word detection paused.");
+  }
+  playSound('click');
+};
+
+$('#offline-toggle').onchange = e => {
+  const isOffline = e.target.checked;
+  sendWS({ type: 'set_offline_mode', enabled: isOffline });
+  if (isOffline) {
+    $('#status-badge').textContent = 'NEURAL CORE // OFFLINE LOCAL MODE';
+    $('#status-badge').style.color = 'var(--amber)';
+    appendDiagLog("Neural Engine: Switched to Local Offline Mode (Ollama).");
+  } else {
+    $('#status-badge').textContent = 'SYSTEM NOMINAL // STANDBY';
+    $('#status-badge').style.color = 'var(--cyan)';
+    appendDiagLog("Neural Engine: Switched to Online Cloud Mode (Gemini).");
+  }
+  playSound('click');
+};
+
+async function startAudioCapture() {
+  resetWakeCommandState();
+  safeStopSpeechRecognition();
+  if (isRecording) return;
+  if (!audioStream) {
+    const ok = await initMicStream($('#audio-device-select').value);
+    if (!ok) return;
+  }
+  if (audioContext && audioContext.state === 'suspended') {
+    audioContext.resume();
+  }
+
+  try {
+    isRecording = true;
+    audioChunks = [];
+    const mimeTypes = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
+    let chosenMime = 'audio/webm';
+    for (const m of mimeTypes) {
+      if (MediaRecorder.isTypeSupported(m)) {
+        chosenMime = m;
+        break;
+      }
+    }
+
+    const streamToRecord = processedStream || audioStream;
+    mediaRecorder = new MediaRecorder(streamToRecord, {
+      mimeType: chosenMime,
+      audioBitsPerSecond: 128000
+    });
+
+    mediaRecorder.ondataavailable = e => {
+      if (e.data && e.data.size > 0) audioChunks.push(e.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+      const audioBlob = new Blob(audioChunks, { type: chosenMime });
+      // Minimum cutoff reduced to 600 bytes for rapid responsive commands
+      if (audioBlob.size > 600) {
+        $('#speech-hud-text').textContent = '⚡ Transmitting audio to neural core...';
+        $('#speech-hud').className = '';
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const b64 = reader.result.split(',')[1];
+          sendWS({ type: 'audio', data: b64, mime: chosenMime });
+        };
+        reader.readAsDataURL(audioBlob);
+      } else {
+        $('#speech-hud-text').textContent = '🎙️ Transmission cancelled (too short).';
+        $('#speech-hud').className = 'empty';
+      }
+    };
+
+    // 100ms timeslice buffering for continuous memory streaming
+    mediaRecorder.start(100);
+    playSound('beep');
+    $('#arc').classList.add('recording');
+    $('#mic-btn').classList.add('recording');
+    $('#mic-label').textContent = 'RECORDING... RELEASE TO SEND';
+    $('#status-badge').textContent = 'ACOUSTIC STREAM TRANSMITTING';
+    $('#status-badge').style.color = 'var(--red)';
+    $('#speech-hud').className = 'recording';
+    $('#speech-hud-text').textContent = '🔴 Listening... Release button or pause speaking';
+    appendDiagLog("Direct audio recording engaged.");
+  } catch (err) {
+    appendDiagLog(`Recorder error: ${err.message}`);
+    isRecording = false;
+  }
+}
+
+function safeStartSpeechRecognition() {
+  if (!wakeWordActive || !speechRecognizer) return;
+  if (isSpeechRecognizing) return;
+  if (isRecording) return;
+  if (currentAudioPlayer && !currentAudioPlayer.paused) return;
+
+  try {
+    speechRecognizer.start();
+  } catch (err) {
+    if (err.name === 'InvalidStateError') {
+      isSpeechRecognizing = true;
+    }
+  }
+}
+
+function safeStopSpeechRecognition() {
+  if (wakeRestartTimer) clearTimeout(wakeRestartTimer);
+  if (!speechRecognizer) return;
+  try {
+    speechRecognizer.stop();
+  } catch (err) {}
+  isSpeechRecognizing = false;
+}
+
+function scheduleWakeRestart(delay = 200) {
+  if (!wakeWordActive) return;
+  if (wakeRestartTimer) clearTimeout(wakeRestartTimer);
+  wakeRestartTimer = setTimeout(() => {
+    safeStartSpeechRecognition();
+  }, delay);
+}
+
+function updateMicHUDIndicator(active) {
+  const hudText = $('#speech-hud-text');
+  const hud = $('#speech-hud');
+  if (!hudText) return;
+  if (isRecording) return;
+  if (isAwaitingVoiceCommand) {
+    hudText.textContent = '⚡ YES, SIR? SPEAK YOUR COMMAND...';
+    hudText.style.color = 'var(--amber)';
+    if (hud) hud.className = 'listening';
+    return;
+  }
+  if (active && wakeWordActive) {
+    hudText.textContent = '🟢 ALWAYS-ON MIC ACTIVE // SAY "JARVIS"';
+    hudText.style.color = 'var(--emerald)';
+    if (hud) hud.className = '';
+  } else if (!wakeWordActive) {
+    hudText.textContent = '🎙️ Always-On Mic paused. Click or hold to speak.';
+    hudText.style.color = 'var(--dim)';
+    if (hud) hud.className = 'empty';
+  }
+}
+
+function resetWakeCommandState() {
+  if (voiceCommandDebounceTimer) {
+    clearTimeout(voiceCommandDebounceTimer);
+    voiceCommandDebounceTimer = null;
+  }
+  if (wakeWordPendingTimer) {
+    clearTimeout(wakeWordPendingTimer);
+    wakeWordPendingTimer = null;
+  }
+  if (followUpTimeoutTimer) {
+    clearTimeout(followUpTimeoutTimer);
+    followUpTimeoutTimer = null;
+  }
+  isAwaitingVoiceCommand = false;
+  lastTranscribedCommand = "";
+  $('#arc').classList.remove('speaking');
+  updateMicHUDIndicator(true);
+}
+
+function parseWakeStream(text) {
+  if (!text) return { matched: false, wakeWord: null, command: "" };
+  const t = text.trim().toLowerCase();
+  const wakeWords = [
+    "hey jarvis", "hi jarvis", "hello jarvis", "ok jarvis", "okay jarvis", "yo jarvis",
+    "jarvis", "javis", "travis", "service", "harvest", "jarves", "starburst"
+  ];
+  for (const w of wakeWords) {
+    const idx = t.indexOf(w);
+    if (idx !== -1) {
+      const remainder = t.slice(idx + w.length).replace(/^[,.:;!?-]+/, '').trim();
+      return { matched: true, wakeWord: w, command: remainder };
+    }
+  }
+  return { matched: false, wakeWord: null, command: "" };
+}
+
+function executeVocalCommand(cmd) {
+  cmd = (cmd || "").replace(/^[,.:;!?-]+/, '').trim();
+  if (!cmd || cmd.length < 2) return;
+  const now = Date.now();
+  if (cmd.toLowerCase() === lastExecutedCommand.toLowerCase() && (now - lastExecutedTime) < 1800) {
+    resetWakeCommandState();
+    return;
+  }
+  lastExecutedCommand = cmd;
+  lastExecutedTime = now;
+
+  resetWakeCommandState();
+  playSound('click');
+  $('#speech-hud-text').textContent = `⚡ DISPATCHING: "${cmd}"`;
+  $('#speech-hud').className = '';
+  $('#arc').classList.add('speaking');
+  appendDiagLog(`Voice Sentinel dispatched command: "${cmd}"`);
+  submitTask(cmd);
+}
+
+function initWakeWordListener() {
+  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRec) {
+    appendDiagLog("Continuous wake-word engine: Web Speech API unavailable in this browser.");
+    return;
+  }
+
+  try {
+    if (speechRecognizer) {
+      try { speechRecognizer.stop(); } catch(e) {}
+    }
+    speechRecognizer = new SpeechRec();
+    speechRecognizer.continuous = true;
+    speechRecognizer.interimResults = true;
+    speechRecognizer.lang = 'en-US';
+    speechRecognizer.maxAlternatives = 3;
+
+    speechRecognizer.onstart = () => {
+      isSpeechRecognizing = true;
+      updateMicHUDIndicator(true);
+      appendDiagLog("Always-On Acoustic Sentinel active (Say 'Jarvis' or 'Hey Jarvis').");
+    };
+
+    speechRecognizer.onresult = (event) => {
+      if (!wakeWordActive || isRecording || (state === 'thinking') || (currentAudioPlayer && !currentAudioPlayer.paused)) return;
+
+      let interimChunk = '';
+      let finalChunk = '';
+      let isAnyFinal = false;
+
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        const item = event.results[i];
+        if (item.isFinal) {
+          finalChunk += item[0].transcript + ' ';
+          isAnyFinal = true;
+        } else {
+          interimChunk += item[0].transcript + ' ';
+        }
+      }
+
+      const activeTranscript = (finalChunk + interimChunk).trim();
+      if (!activeTranscript) return;
+
+      // MODE 1: Sir already activated the Sentinel ("Jarvis") and we are awaiting their command
+      if (isAwaitingVoiceCommand) {
+        let cleanCommand = activeTranscript;
+        const parsed = parseWakeStream(activeTranscript);
+        if (parsed.matched && parsed.command) {
+          cleanCommand = parsed.command;
+        } else if (parsed.matched && !parsed.command) {
+          // Sir repeated "Jarvis" - refresh the 9s follow-up timeout
+          if (followUpTimeoutTimer) clearTimeout(followUpTimeoutTimer);
+          followUpTimeoutTimer = setTimeout(() => {
+            appendDiagLog("Sentinel standby timed out. Resuming background vigilance.");
+            resetWakeCommandState();
+          }, 9000);
+          return;
+        }
+
+        cleanCommand = cleanCommand.replace(/^[,.:;!?-]+/, '').trim();
+        if (cleanCommand.length >= 2) {
+          lastTranscribedCommand = cleanCommand;
+          $('#speech-hud-text').textContent = `⚡ YES, SIR: "${cleanCommand}"`;
+          $('#speech-hud').className = 'listening';
+          $('#arc').classList.add('speaking');
+
+          if (isAnyFinal) {
+            executeVocalCommand(lastTranscribedCommand);
+          } else {
+            if (voiceCommandDebounceTimer) clearTimeout(voiceCommandDebounceTimer);
+            voiceCommandDebounceTimer = setTimeout(() => {
+              executeVocalCommand(lastTranscribedCommand);
+            }, 750);
+          }
+        }
+        return;
+      }
+
+      // MODE 2: Sentinel in vigilance mode - searching for wake word
+      const parsed = parseWakeStream(activeTranscript);
+      if (!parsed.matched) return;
+
+      // Direct one-shot utterance ("Jarvis open Chrome")
+      if (parsed.command && parsed.command.length >= 2) {
+        if (wakeWordPendingTimer) {
+          clearTimeout(wakeWordPendingTimer);
+          wakeWordPendingTimer = null;
+        }
+        lastTranscribedCommand = parsed.command;
+        $('#speech-hud-text').textContent = `⚡ DIRECT COMMAND: "${parsed.command}"`;
+        $('#speech-hud').className = 'listening';
+        $('#arc').classList.add('speaking');
+
+        if (isAnyFinal) {
+          executeVocalCommand(lastTranscribedCommand);
+        } else {
+          if (voiceCommandDebounceTimer) clearTimeout(voiceCommandDebounceTimer);
+          voiceCommandDebounceTimer = setTimeout(() => {
+            executeVocalCommand(lastTranscribedCommand);
+          }, 750);
+        }
+      } else {
+        // Wake word spoken alone ("Jarvis" or "Hey Jarvis")
+        if (!wakeWordPendingTimer && !isAwaitingVoiceCommand) {
+          wakeWordPendingTimer = setTimeout(() => {
+            wakeWordPendingTimer = null;
+            isAwaitingVoiceCommand = true;
+            playSound('chime');
+            $('#speech-hud-text').textContent = '⚡ YES, SIR? SPEAK YOUR COMMAND...';
+            $('#speech-hud').className = 'listening';
+            $('#arc').classList.add('speaking');
+            appendDiagLog("Acoustic Sentinel awakened: Standing by for Sir's command...");
+
+            if (followUpTimeoutTimer) clearTimeout(followUpTimeoutTimer);
+            followUpTimeoutTimer = setTimeout(() => {
+              appendDiagLog("Sentinel standby timed out. Resuming background vigilance.");
+              resetWakeCommandState();
+            }, 9000);
+          }, 600);
+        }
+      }
+    };
+
+    speechRecognizer.onerror = (e) => {
+      isSpeechRecognizing = false;
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        const hudText = $('#speech-hud-text');
+        if (hudText) {
+          hudText.textContent = '⚠️ Mic access blocked. Click page or mic button to allow.';
+          hudText.style.color = 'var(--amber)';
+        }
+        $('#speech-hud').className = 'empty';
+        appendDiagLog(`Speech Recognition blocked (${e.error}). Click page to grant permission.`);
+      } else if (e.error !== 'no-speech' && e.error !== 'aborted') {
+        appendDiagLog(`Speech sentinel notice: ${e.error}`);
+        if (wakeWordActive && !isRecording && (!currentAudioPlayer || currentAudioPlayer.paused)) {
+          scheduleWakeRestart(500);
+        }
+      } else if (wakeWordActive && !isRecording && (!currentAudioPlayer || currentAudioPlayer.paused)) {
+        scheduleWakeRestart(200);
+      }
+    };
+
+    speechRecognizer.onend = () => {
+      isSpeechRecognizing = false;
+      if (wakeWordActive && !isRecording && (!currentAudioPlayer || currentAudioPlayer.paused)) {
+        scheduleWakeRestart(150);
+      }
+    };
+
+    safeStartSpeechRecognition();
+  } catch (e) {
+    console.warn("Wake-word initialization notice:", e);
+  }
+}
+
+function triggerHandsFreeRecording() {
+  safeStopSpeechRecognition();
+  startAudioCapture();
+  lastSpeechTime = Date.now();
+
+  if (vadCheckInterval) clearInterval(vadCheckInterval);
+  vadCheckInterval = setInterval(() => {
+    if (!isRecording) {
+      clearInterval(vadCheckInterval);
+      return;
+    }
+
+    if (analyser) {
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteFrequencyData(dataArray);
+      let sum = 0;
+      for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+      const avg = sum / dataArray.length;
+
+      if (avg > 14) {
+        lastSpeechTime = Date.now();
+      } else {
+        if (Date.now() - lastSpeechTime > 1400) {
+          clearInterval(vadCheckInterval);
+          stopAudioCapture();
+          playSound('beep');
+        }
+      }
+    }
+  }, 100);
+}
+
+function stopAudioCapture() {
+  if (!isRecording) return;
+  isRecording = false;
+  $('#arc').classList.remove('recording');
+  $('#mic-btn').classList.remove('recording');
+  $('#mic-label').textContent = 'CLICK OR HOLD TO SPEAK';
+  $('#status-badge').textContent = 'SYSTEM NOMINAL // STANDBY';
+  $('#status-badge').style.color = 'var(--cyan)';
+  try {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+    }
+  } catch(e) {}
+  scheduleWakeRestart(400);
+  updateMicHUDIndicator(true);
+}
+
+let micPressStartTime = 0;
+let isHoldingMic = false;
+let clickHoldTimeout = null;
+
+$('#mic-btn').addEventListener('mousedown', () => {
+  micPressStartTime = Date.now();
+  isHoldingMic = false;
+  clickHoldTimeout = setTimeout(() => {
+    isHoldingMic = true;
+    if (!isRecording) startAudioCapture();
+  }, 180);
+});
+
+window.addEventListener('mouseup', () => {
+  clearTimeout(clickHoldTimeout);
+  if (isHoldingMic) {
+    isHoldingMic = false;
+    if (isRecording) stopAudioCapture();
+  }
+});
+
+$('#mic-btn').addEventListener('click', () => {
+  const duration = Date.now() - micPressStartTime;
+  if (duration < 180) {
+    // Quick click: toggle recording
+    if (isRecording) {
+      stopAudioCapture();
+    } else {
+      startAudioCapture();
+    }
+  }
+});
+
+let spaceHeld = false;
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space' && document.activeElement.tagName !== 'INPUT' && !spaceHeld) {
+    e.preventDefault();
+    spaceHeld = true;
+    startAudioCapture();
+  }
+});
+window.addEventListener('keyup', e => {
+  if (e.code === 'Space' && spaceHeld) {
+    spaceHeld = false;
+    stopAudioCapture();
+  }
+});
+
+function sendWS(obj) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(obj));
+    return true;
+  } else {
+    appendDiagLog("⚠️ Transmission queued / link offline. Reconnecting...");
+    connectWebSocket();
+    return false;
+  }
+}
+
+function appendChat(role, text, id) {
+  if (id) {
+    const existing = document.getElementById('msg-' + id);
+    if (existing) {
+      existing.textContent = text;
+      $('#chat-log').scrollTop = 1e9;
+      return existing;
+    }
+  }
+  const d = document.createElement('div');
+  d.className = `bubble ${role}`;
+  if (id) d.id = 'msg-' + id;
+  d.textContent = text;
+  $('#chat-log').appendChild(d);
+  $('#chat-log').scrollTop = 1e9;
+  return d;
+}
+
+function appendDiagLog(text) {
+  const d = document.createElement('div');
+  d.className = 'log-line';
+  d.textContent = text;
+  $('#diag-console').appendChild(d);
+  $('#diag-console').scrollTop = 1e9;
+}
+
+function playNeuralAudio(b64Audio) {
+  if (!$('#tts-toggle').checked) return;
+  try {
+    getTTSAnalyser();
+    ttsAudio.pause();
+    ttsAudio.currentTime = 0;
+    ttsAudio.src = "data:audio/mp3;base64," + b64Audio;
+    currentAudioPlayer = ttsAudio;
+
+    ttsAudio.onplay = () => {
+      safeStopSpeechRecognition();
+      $('#arc').classList.add('speaking');
+      $('#status-badge').textContent = 'NEURAL VOCAL SYNTHESIS ACTIVE';
+      $('#status-badge').style.color = 'var(--amber)';
+      playSound('chime');
+    };
+    ttsAudio.onended = ttsAudio.onerror = () => {
+      $('#arc').classList.remove('speaking');
+      $('#status-badge').textContent = 'SYSTEM NOMINAL // STANDBY';
+      $('#status-badge').style.color = 'var(--cyan)';
+      currentAudioPlayer = null;
+      scheduleWakeRestart(350);
+      updateMicHUDIndicator(true);
+    };
+    ttsAudio.play().catch(e => {
+      console.log("Autoplay check:", e);
+      currentAudioPlayer = null;
+      scheduleWakeRestart(350);
+    });
+  } catch (err) {
+    console.error("Audio playback error:", err);
+  }
+}
+
+function getLiveAudioEnergy() {
+  // 1. If J.A.R.V.I.S. is speaking via Neural TTS
+  if (currentAudioPlayer && !currentAudioPlayer.paused && ttsAnalyser) {
+    const freq = new Uint8Array(ttsAnalyser.frequencyBinCount);
+    ttsAnalyser.getByteFrequencyData(freq);
+    let sum = 0;
+    for (let i = 0; i < freq.length; i++) sum += freq[i];
+    const avg = sum / (freq.length || 1);
+    return {
+      active: true,
+      mode: 'speaking',
+      energy: Math.min(1.0, avg / 110),
+      frequencies: freq
+    };
+  }
+
+  // 2. If Sir is speaking into the microphone
+  if (isRecording && analyser) {
+    const freq = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(freq);
+    let sum = 0;
+    for (let i = 0; i < freq.length; i++) sum += freq[i];
+    const avg = sum / (freq.length || 1);
+    return {
+      active: true,
+      mode: 'recording',
+      energy: Math.min(1.0, avg / 90),
+      frequencies: freq
+    };
+  }
+
+  // 3. If J.A.R.V.I.S. is computing neural logic (thinking)
+  if (state === 'thinking') {
+    const t = Date.now() / 150;
+    return {
+      active: true,
+      mode: 'thinking',
+      energy: 0.35 + 0.25 * Math.sin(t),
+      frequencies: null
+    };
+  }
+
+  // 4. Standby / Idle (gentle harmonic breathing)
+  const t = Date.now() / 900;
+  return {
+    active: false,
+    mode: 'idle',
+    energy: 0.08 + 0.05 * Math.sin(t),
+    frequencies: null
+  };
+}
+
+function submitTask(text) {
+  text = text.trim();
+  if (!text) return;
+  resetWakeCommandState();
+  playSound('click');
+  appendChat('user', text);
+  if (currentAudioPlayer) {
+    currentAudioPlayer.pause();
+    currentAudioPlayer = null;
+  }
+  sendWS({ type: 'task', text: text });
+}
+
+function quickAction(cmd) {
+  submitTask(cmd);
+}
+
+function renderApproval(m) {
+  playSound('beep');
+  const d = document.createElement('div');
+  d.className = 'approval-card';
+  d.innerHTML = `
+    <div class="appr-header">CONFIRM DESTRUCTIVE ACTION: ${m.tool.toUpperCase()}?</div>
+    <pre>${JSON.stringify(m.args, null, 2)}</pre>
+    <div class="approval-actions">
+      <button class="appr-allow">AUTHORIZE (YES, SIR)</button>
+      <button class="appr-deny">ABORT</button>
+    </div>
+  `;
+  d.querySelector('.appr-allow').onclick = () => {
+    sendWS({ type: 'approve', id: m.id, ok: true });
+    d.innerHTML = `<span style="color: var(--emerald); font-family: var(--font-hud);">[ ACTION AUTHORIZED BY SIR ]</span>`;
+  };
+  d.querySelector('.appr-deny').onclick = () => {
+    sendWS({ type: 'approve', id: m.id, ok: false });
+    d.innerHTML = `<span style="color: var(--red); font-family: var(--font-hud);">[ ACTION ABORTED BY SIR ]</span>`;
+  };
+  $('#chat-log').appendChild(d);
+  $('#chat-log').scrollTop = 1e9;
+}
+
+function connectWebSocket() {
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${protocol}//${location.host}/ws`;
+
+  try {
+    ws = new WebSocket(wsUrl);
+  } catch (err) {
+    console.error("WebSocket init error:", err);
+    scheduleReconnect();
+    return;
+  }
+
+  ws.onopen = () => {
+    clearTimeout(wsReconnectTimer);
+    wsReconnectTimer = null;
+    $('#status-badge').textContent = 'SYSTEM NOMINAL // STANDBY';
+    $('#status-badge').style.color = 'var(--cyan)';
+    appendDiagLog("Subsystem telemetry link synced.");
+
+    if (isFirstConnect) {
+      isFirstConnect = false;
+      initMicStream().then(() => {
+        initWakeWordListener();
+      }).catch(() => {});
+    }
+
+    if (wsPingInterval) clearInterval(wsPingInterval);
+    wsPingInterval = setInterval(() => {
+      sendWS({ type: 'ping' });
+    }, 5000);
+  };
+
+  ws.onclose = (event) => {
+    if (wsPingInterval) clearInterval(wsPingInterval);
+    $('#status-badge').textContent = 'NEURAL LINK OFFLINE // RECONNECTING...';
+    $('#status-badge').style.color = 'var(--amber)';
+    scheduleReconnect();
+  };
+
+  ws.onerror = (err) => {
+    // onclose triggers scheduleReconnect
+  };
+
+  ws.onmessage = handleWSMessage;
+}
+
+function scheduleReconnect() {
+  if (wsReconnectTimer) return;
+  wsReconnectTimer = setTimeout(() => {
+    wsReconnectTimer = null;
+    connectWebSocket();
+  }, 2000);
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function copyAgyPrompt(btn, text) {
+  navigator.clipboard.writeText(text).then(() => {
+    const original = btn.textContent;
+    btn.classList.add('copied');
+    btn.textContent = '✅ COPIED! PASTE IN ANTIGRAVITY';
+    appendDiagLog('Copied Antigravity directive to clipboard.');
+    playSound('chime');
+    setTimeout(() => {
+      btn.classList.remove('copied');
+      btn.textContent = original;
+    }, 4000);
+  }).catch(err => {
+    console.error("Clipboard copy error:", err);
+  });
+}
+
+function renderAntigravityDirective(d) {
+  playSound('beep');
+  appendDiagLog(`Antigravity Directive received: ${d.title}`);
+
+  const container = document.createElement('div');
+  container.className = 'bubble jarvis';
+  container.style.border = '1px solid rgba(0, 240, 255, 0.4)';
+  container.style.background = 'rgba(2, 12, 24, 0.92)';
+
+  let html = `
+    <div style="font-family: var(--font-hud); font-size: 11px; color: var(--cyan); margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+      <span>🚀 <strong>ANTIGRAVITY DIRECTIVE ENGINE</strong></span>
+      <span style="font-family: var(--font-mono); font-size: 9px; color: var(--emerald);">STATUS: READY TO EXECUTE</span>
+    </div>
+    <div style="font-size: 12px; color: var(--txt); margin-bottom: 8px;">
+      Directives formulated for Google Antigravity. Click <strong>COPY</strong> on any card and paste into the Antigravity chat to execute:
+    </div>
+  `;
+
+  if (d.prompt) {
+    html += `
+      <div class="agy-card">
+        <div class="agy-card-header">
+          <span>${escapeHtml(d.title)}</span>
+          <span class="agy-card-cmd">${escapeHtml(d.command || '/boost')}</span>
+        </div>
+        <div class="agy-card-body">${escapeHtml(d.prompt)}</div>
+        <button class="agy-card-btn" onclick="copyAgyPrompt(this, this.previousElementSibling.textContent)">📋 COPY DIRECTIVE FOR ANTIGRAVITY</button>
+      </div>
+    `;
+  } else if (d.blueprints) {
+    for (const [key, bp] of Object.entries(d.blueprints)) {
+      html += `
+        <div class="agy-card">
+          <div class="agy-card-header">
+            <span>${escapeHtml(bp.title)}</span>
+            <span class="agy-card-cmd">${escapeHtml(bp.command)}</span>
+          </div>
+          <div class="agy-card-body">${escapeHtml(bp.prompt)}</div>
+          <button class="agy-card-btn" onclick="copyAgyPrompt(this, this.previousElementSibling.textContent)">📋 COPY ${escapeHtml(bp.command.toUpperCase())} DIRECTIVE</button>
+        </div>
+      `;
+    }
+  }
+
+  container.innerHTML = html;
+  $('#chat-log').appendChild(container);
+  $('#chat-log').scrollTop = 1e9;
+}
+
+let currentIntelUrl = "";
+let currentIntelBackup = "";
+
+function renderIntelMedia(msg) {
+  currentIntelUrl = msg.image_url || "";
+  currentIntelBackup = msg.backup_url || "";
+
+  const box = $('#optics-box');
+  const headerBar = $('#optics-header-bar');
+  const tag = $('#optics-tag');
+  const img = $('#optics-img');
+  const placeholder = $('#optics-placeholder');
+  const intelInfo = $('#optics-intel-info');
+  const title = $('#optics-title');
+  const caption = $('#optics-caption');
+
+  box.classList.add('active-intel');
+  headerBar.style.display = 'flex';
+  tag.textContent = `TARGET INTEL // ${(msg.title || msg.query || 'SUBJECT').toUpperCase()}`;
+
+  if (currentIntelUrl) {
+    placeholder.style.display = 'none';
+    img.style.display = 'block';
+    img.dataset.proxied = '';
+    img.src = currentIntelUrl;
+    img.onerror = () => {
+      if (currentIntelBackup && img.src !== currentIntelBackup) {
+        console.warn("Primary intel image failed, loading backup:", currentIntelBackup);
+        img.src = currentIntelBackup;
+      } else if (!img.dataset.proxied && currentIntelUrl) {
+        img.dataset.proxied = '1';
+        console.warn("Retrying intel image via local proxy...");
+        img.src = '/api/proxy_image?url=' + encodeURIComponent(currentIntelUrl);
+      }
+    };
+  } else {
+    img.style.display = 'none';
+    placeholder.style.display = 'flex';
+    $('#optics-label').textContent = `INTEL ACQUIRED: ${(msg.title || msg.query).toUpperCase()}`;
+  }
+
+  if (msg.title || msg.summary) {
+    intelInfo.style.display = 'block';
+    title.textContent = msg.title || msg.query;
+    caption.textContent = msg.summary || "Visual telemetry acquired and beamed to optical HUD.";
+  }
+
+  appendDiagLog(`Holographic Subject Intel: ${msg.title || msg.query}`);
+  playSound('beep');
+}
+
+function renderScreenFrame(msg) {
+  const box = $('#optics-box');
+  const headerBar = $('#optics-header-bar');
+  const tag = $('#optics-tag');
+  const img = $('#optics-img');
+  const placeholder = $('#optics-placeholder');
+  const intelInfo = $('#optics-intel-info');
+
+  box.classList.add('active-intel');
+  headerBar.style.display = 'flex';
+  tag.textContent = (msg.label || "OPTICAL TELEMETRY").toUpperCase();
+  placeholder.style.display = 'none';
+  intelInfo.style.display = 'none';
+  img.style.display = 'block';
+  img.src = msg.img;
+}
+
+function handleWSMessage(e) {
+  const msg = JSON.parse(e.data);
+  if (msg.type === 'say') {
+    appendChat('jarvis', msg.text, msg.id);
+    appendSuggestionChips();
+    if (msg.audio) {
+      playNeuralAudio(msg.audio);
+    }
+  } else if (msg.type === 'say_text') {
+    appendChat('jarvis', msg.text, msg.id);
+  } else if (msg.type === 'say_audio') {
+    if (msg.audio) {
+      playNeuralAudio(msg.audio);
+    }
+  } else if (msg.type === 'antigravity_directive') {
+    renderAntigravityDirective(msg.directive);
+  } else if (msg.type === 'intel_media') {
+    renderIntelMedia(msg);
+  } else if (msg.type === 'open_tab' && msg.url) {
+    try {
+      window.open(msg.url, '_blank');
+    } catch (e) {
+      console.warn("Popup blocked:", e);
+    }
+    const linkBubble = document.createElement('div');
+    linkBubble.className = 'bubble jarvis';
+    linkBubble.innerHTML = `🌐 <strong>BROWSER TAB OPENED:</strong> <a href="${msg.url}" target="_blank" style="color: var(--cyan); text-decoration: underline; font-weight: bold;">${msg.url}</a>`;
+    $('#chat-log').appendChild(linkBubble);
+    $('#chat-log').scrollTop = 1e9;
+    appendDiagLog(`Opened browser tab: ${msg.url}`);
+  } else if (msg.type === 'user_heard') {
+    appendChat('user', msg.text);
+    $('#speech-hud-text').textContent = `✅ Transcribed: "${msg.text}"`;
+    $('#speech-hud').className = '';
+  } else if (msg.type === 'log') {
+    appendDiagLog(msg.text);
+  } else if (msg.type === 'state') {
+    state = msg.s;
+    if (state === 'thinking') {
+      $('#arc').classList.add('thinking');
+      $('#status-badge').textContent = 'COMPUTING NEURAL LOGIC';
+      $('#status-badge').style.color = 'var(--cyan)';
+    } else {
+      $('#arc').classList.remove('thinking');
+      if (!isRecording && (!currentAudioPlayer || currentAudioPlayer.paused)) {
+        $('#status-badge').textContent = 'SYSTEM NOMINAL // STANDBY';
+        $('#status-badge').style.color = 'var(--cyan)';
+      }
+    }
+    $('#stop-btn').style.display = (state !== 'idle') ? 'block' : 'none';
+  } else if (msg.type === 'telemetry') {
+    $('#cpu-val').textContent = `${Math.round(msg.cpu)}%`;
+    $('#cpu-bar').style.width = `${Math.min(100, msg.cpu)}%`;
+    if (typeof pushCpuReading === 'function') {
+      pushCpuReading(msg.cpu);
+    }
+    $('#ram-val').textContent = `${Math.round(msg.ram_pct)}% (${msg.ram_used_gb}/${msg.ram_total_gb} GB)`;
+    $('#ram-bar').style.width = `${msg.ram_pct}%`;
+    if (msg.disk_pct !== undefined) {
+      $('#disk-val').textContent = `${Math.round(msg.disk_pct)}% (${msg.disk_free_gb} GB free)`;
+      $('#disk-bar').style.width = `${msg.disk_pct}%`;
+    }
+    $('#batt-val').textContent = `${msg.battery_pct}% ${msg.battery_plugged ? '(AC)' : '(DC)'}`;
+    $('#batt-bar').style.width = `${msg.battery_pct}%`;
+    $('#clock').textContent = msg.timestamp || new Date().toLocaleTimeString();
+  } else if (msg.type === 'screen') {
+    renderScreenFrame(msg);
+  } else if (msg.type === 'approval') {
+    renderApproval(msg);
+  } else if (msg.type === 'memories') {
+    currentMemories = msg.list || [];
+    renderMemoryList();
+  } else if (msg.type === 'memory_search_results') {
+    renderMemoryList(msg.list || []);
+  } else if (msg.type === 'sentinel_event') {
+    const evt = msg.event || {};
+    appendDiagLog(`⚡ SENTINEL: [${(evt.category || 'ALERT').toUpperCase()}] ${evt.log || evt.speech || ''}`);
+    playSound('chime');
+  } else if (msg.type === 'core_mode') {
+    const isOffline = (msg.mode === 'offline');
+    const toggle = $('#offline-toggle');
+    if (toggle) toggle.checked = isOffline;
+    $('#status-badge').textContent = msg.label || (isOffline ? 'NEURAL CORE // OFFLINE LOCAL MODE' : 'SYSTEM NOMINAL // STANDBY');
+    $('#status-badge').style.color = isOffline ? 'var(--amber)' : 'var(--cyan)';
+  } else if (msg.type === 'chat_history') {
+    if (msg.messages && msg.messages.length > 0) {
+      restoreChatHistory(msg.messages);
+    }
+  } else if (msg.type === 'chat_cleared') {
+    appendDiagLog("Persistent chat history cleared from SQLite cortex.");
+  } else if (msg.type === 'error') {
+    appendChat('error', msg.text);
+  }
+};
+
+$('#stop-btn').onclick = () => {
+  if (currentAudioPlayer) {
+    currentAudioPlayer.pause();
+    currentAudioPlayer = null;
+  }
+  sendWS({ type: 'stop' });
+};
+
+$('#chat-form').onsubmit = e => {
+  e.preventDefault();
+  submitTask($('#chat-input').value);
+  $('#chat-input').value = '';
+};
+
+// Vector Memory Cortex Drawer Management
+let activeMemoryFilter = 'all';
+let memorySearchQuery = '';
+
+function openMemoryDrawer() {
+  playSound('click');
+  $('#memory-drawer').classList.add('open');
+  renderMemoryList();
+}
+function closeMemoryDrawer() {
+  playSound('click');
+  $('#memory-drawer').classList.remove('open');
+}
+
+function renderMemoryList(memoriesToRender = null) {
+  const container = $('#memory-list');
+  const countBadge = $('#cortex-count-badge');
+  container.innerHTML = '';
+  
+  const list = memoriesToRender !== null ? memoriesToRender : currentMemories;
+  if (countBadge) {
+    countBadge.textContent = `${currentMemories.length} VECTORS`;
+  }
+
+  const filtered = list.filter(m => {
+    const cat = typeof m === 'object' && m !== null ? (m.category || 'preference') : 'preference';
+    if (activeMemoryFilter !== 'all' && cat !== activeMemoryFilter) return false;
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = `<div style="text-align: center; color: var(--dim); font-size: 12px; padding: 40px 10px; font-family: var(--font-mono);">
+      <div style="font-size: 24px; margin-bottom: 8px; opacity: 0.5;">🧠</div>
+      NO MATCHING VECTOR MEMORIES FOUND
+    </div>`;
+    return;
+  }
+
+  filtered.forEach((mem, idx) => {
+    const isObj = typeof mem === 'object' && mem !== null;
+    const id = isObj && mem.id ? mem.id : `mem_${idx}`;
+    const text = isObj ? (mem.text || '') : String(mem);
+    const category = isObj ? (mem.category || 'preference') : 'preference';
+    const timestamp = isObj ? (mem.timestamp || 'Recent') : 'Recent';
+    const confVal = isObj && typeof mem.confidence === 'number' ? Math.round(mem.confidence * 100) : 100;
+
+    const card = document.createElement('div');
+    card.className = 'memory-card';
+    card.innerHTML = `
+      <div class="memory-card-header">
+        <span class="mem-cat-badge ${category}">${escapeHtml(category.replace('_', ' '))}</span>
+        <button class="memory-del" onclick="deleteMemory('${id}')" title="Purge memory vector">&times;</button>
+      </div>
+      <div class="mem-text">${escapeHtml(text)}</div>
+      <div class="memory-card-footer">
+        <span class="mem-conf-tag">${confVal}% CONF</span>
+        <span>${escapeHtml(timestamp)}</span>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+function setMemoryFilter(cat, elem) {
+  activeMemoryFilter = cat;
+  document.querySelectorAll('.cortex-pill').forEach(p => p.classList.remove('active'));
+  if (elem) elem.classList.add('active');
+  renderMemoryList();
+}
+
+let memSearchTimeout = null;
+function onMemorySearchInput(query) {
+  memorySearchQuery = query.trim();
+  clearTimeout(memSearchTimeout);
+  if (!memorySearchQuery) {
+    renderMemoryList(currentMemories);
+    return;
+  }
+  memSearchTimeout = setTimeout(() => {
+    sendWS({ type: 'search_memories', query: memorySearchQuery });
+  }, 200);
+}
+
+function addMemoryManual() {
+  const input = $('#new-mem-input');
+  const catSelect = $('#new-mem-cat');
+  const fact = input.value.trim();
+  const category = catSelect ? catSelect.value : 'preference';
+  if (fact) {
+    sendWS({ type: 'add_memory', fact: fact, category: category });
+    input.value = '';
+    playSound('click');
+  }
+}
+
+function deleteMemory(id) {
+  sendWS({ type: 'delete_memory', id: id });
+  playSound('click');
+}
+
+// ---------------------------------------------------------------------
+// STARK INDUSTRIES MARK VII 3D HOLOGRAPHIC ARC REACTOR (THREE.JS WEBGL)
+// ---------------------------------------------------------------------
+function initArcReactor3D() {
+  const container = document.getElementById('arc');
+  if (!container || !window.THREE) return;
+
+  const w = container.clientWidth || 270;
+  const h = container.clientHeight || 270;
+
+  // Scene, Camera, Renderer
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(40, w / h, 0.1, 1000);
+  camera.position.z = 215;
+
+  const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: 'high-performance' });
+  renderer.setSize(w, h);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.domElement.id = 'arc-webgl';
+  renderer.domElement.title = "Stark Mark VII Arc Reactor (Click for repulsor shockwave, drag to tilt)";
+  container.appendChild(renderer.domElement);
+  container.classList.add('webgl-active');
+
+  // Reactor Main Parent Group
+  const reactorGroup = new THREE.Group();
+  scene.add(reactorGroup);
+
+  // Cinematic Multi-Source Lighting
+  const ambientLight = new THREE.AmbientLight(0x081e2e, 1.4);
+  scene.add(ambientLight);
+
+  const coreLight = new THREE.PointLight(0x00f0ff, 4.2, 380);
+  coreLight.position.set(0, 0, 14);
+  reactorGroup.add(coreLight);
+
+  const dirLight = new THREE.DirectionalLight(0xffffff, 1.3);
+  dirLight.position.set(50, 70, 90);
+  scene.add(dirLight);
+
+  const fillLight = new THREE.PointLight(0x0088ff, 1.8, 240);
+  fillLight.position.set(-60, -40, 50);
+  scene.add(fillLight);
+
+  const rimLight = new THREE.PointLight(0xffeedd, 1.1, 190);
+  rimLight.position.set(0, 75, 40);
+  scene.add(rimLight);
+
+  // High-Tech PBR & Emissive Materials
+  const vibraniumMat = new THREE.MeshStandardMaterial({
+    color: 0x08131d,
+    metalness: 0.95,
+    roughness: 0.2,
+    emissive: 0x011320,
+    emissiveIntensity: 0.4
+  });
+
+  const palladiumMat = new THREE.MeshStandardMaterial({
+    color: 0xe8f4fc,
+    metalness: 0.98,
+    roughness: 0.12,
+    emissive: 0x071d2b,
+    emissiveIntensity: 0.3
+  });
+
+  const copperMat = new THREE.MeshStandardMaterial({
+    color: 0xdf7228,
+    metalness: 0.92,
+    roughness: 0.26,
+    emissive: 0x5a1800,
+    emissiveIntensity: 0.35
+  });
+
+  const neonCyanMat = new THREE.MeshBasicMaterial({
+    color: 0x00f0ff,
+    wireframe: true,
+    transparent: true,
+    opacity: 0.75
+  });
+
+  const laserEmitterMat = new THREE.MeshBasicMaterial({
+    color: 0x00f0ff,
+    transparent: true,
+    opacity: 0.92
+  });
+
+  const coreGlowMat = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 1.0
+  });
+
+  const plasmaAuraMat = new THREE.MeshBasicMaterial({
+    color: 0x00f0ff,
+    wireframe: true,
+    transparent: true,
+    opacity: 0.55,
+    blending: THREE.AdditiveBlending
+  });
+
+  const outerHaloMat = new THREE.MeshBasicMaterial({
+    color: 0x00f0ff,
+    transparent: true,
+    opacity: 0.35,
+    blending: THREE.AdditiveBlending
+  });
+
+  // 1. Outer Heavy Armor Housing & Compass Calibrator
+  const outerHousingGeo = new THREE.TorusGeometry(52, 3.2, 20, 80);
+  const outerHousing = new THREE.Mesh(outerHousingGeo, vibraniumMat);
+  reactorGroup.add(outerHousing);
+
+  const outerRimGeo = new THREE.TorusGeometry(57.5, 0.7, 8, 80);
+  const outerRim = new THREE.Mesh(outerRimGeo, laserEmitterMat);
+  reactorGroup.add(outerRim);
+
+  // Outer HUD Compass Tick Ring
+  const compassGeo = new THREE.RingGeometry(54.5, 56.5, 48);
+  const compassMat = new THREE.MeshBasicMaterial({
+    color: 0x00a8ff,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.45,
+    wireframe: true
+  });
+  const compassRing = new THREE.Mesh(compassGeo, compassMat);
+  reactorGroup.add(compassRing);
+
+  // 10 Outer Armor Flange Clamps
+  for (let i = 0; i < 10; i++) {
+    const angle = (i / 10) * Math.PI * 2;
+    const tabGeo = new THREE.BoxGeometry(4, 7, 5);
+    const tab = new THREE.Mesh(tabGeo, vibraniumMat);
+    tab.position.x = Math.cos(angle) * 54.5;
+    tab.position.y = Math.sin(angle) * 54.5;
+    tab.rotation.z = angle + Math.PI / 2;
+    reactorGroup.add(tab);
+  }
+
+  // 2. 10 Circumferential Mark VII Transformer Energy Coils
+  const coilGroup = new THREE.Group();
+  reactorGroup.add(coilGroup);
+
+  const numCoils = 10;
+  for (let i = 0; i < numCoils; i++) {
+    const angle = (i / numCoils) * Math.PI * 2;
+    const singleCoil = new THREE.Group();
+
+    // Heavy Saddle Bracket
+    const bracketGeo = new THREE.BoxGeometry(6.5, 12, 5.5);
+    const bracket = new THREE.Mesh(bracketGeo, vibraniumMat);
+    singleCoil.add(bracket);
+
+    // Copper Transformer Core Winding
+    const copperGeo = new THREE.CylinderGeometry(2.4, 2.4, 7.5, 16);
+    const copperMesh = new THREE.Mesh(copperGeo, copperMat);
+    copperMesh.rotation.x = Math.PI / 2;
+    singleCoil.add(copperMesh);
+
+    // Cyan Plasma Emitter Tip
+    const tipGeo = new THREE.BoxGeometry(4.2, 2.2, 4);
+    const tipMesh = new THREE.Mesh(tipGeo, laserEmitterMat);
+    tipMesh.position.y = -6;
+    singleCoil.add(tipMesh);
+
+    // Laser Inflow Guide Filament towards inner core
+    const beamGeo = new THREE.CylinderGeometry(0.3, 0.3, 10, 8);
+    const beamMesh = new THREE.Mesh(beamGeo, laserEmitterMat);
+    beamMesh.position.y = -11;
+    singleCoil.add(beamMesh);
+
+    singleCoil.position.x = Math.cos(angle) * 46.5;
+    singleCoil.position.y = Math.sin(angle) * 46.5;
+    singleCoil.rotation.z = angle + Math.PI / 2;
+
+    coilGroup.add(singleCoil);
+  }
+
+  // 3. Middle Counter-Rotating Gyroscopic Ring
+  const midRingGroup = new THREE.Group();
+  reactorGroup.add(midRingGroup);
+
+  const midRingGeo = new THREE.TorusGeometry(36, 1.6, 16, 64);
+  const midRing = new THREE.Mesh(midRingGeo, neonCyanMat);
+  midRingGroup.add(midRing);
+
+  // Radial Ventilation Disc
+  const notchRingGeo = new THREE.RingGeometry(31.5, 34.5, 32);
+  const notchRingMat = new THREE.MeshBasicMaterial({
+    color: 0x00f0ff,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.55,
+    wireframe: true
+  });
+  const notchRing = new THREE.Mesh(notchRingGeo, notchRingMat);
+  midRingGroup.add(notchRing);
+
+  // 12 Micro Stabilization Nodes
+  for (let s = 0; s < 12; s++) {
+    const sAngle = (s / 12) * Math.PI * 2;
+    const nodeGeo = new THREE.SphereGeometry(1.0, 8, 8);
+    const node = new THREE.Mesh(nodeGeo, laserEmitterMat);
+    node.position.x = Math.cos(sAngle) * 33;
+    node.position.y = Math.sin(sAngle) * 33;
+    midRingGroup.add(node);
+  }
+
+  // 4. Inner Confinement Ring with 6 Radial Titanium Spokes
+  const innerRingGroup = new THREE.Group();
+  reactorGroup.add(innerRingGroup);
+
+  const innerTorusGeo = new THREE.TorusGeometry(23.5, 1.3, 16, 48);
+  const innerTorus = new THREE.Mesh(innerTorusGeo, vibraniumMat);
+  innerRingGroup.add(innerTorus);
+
+  for (let s = 0; s < 6; s++) {
+    const sAngle = (s / 6) * Math.PI * 2;
+    const spokeGeo = new THREE.BoxGeometry(1.3, 10.5, 1.3);
+    const spoke = new THREE.Mesh(spokeGeo, laserEmitterMat);
+    spoke.position.x = Math.cos(sAngle) * 18.5;
+    spoke.position.y = Math.sin(sAngle) * 18.5;
+    spoke.rotation.z = sAngle + Math.PI / 2;
+    innerRingGroup.add(spoke);
+  }
+
+  // 5. Central Triangular Mark VII Core Aperture Plate (Palladium Signature)
+  const apertureGroup = new THREE.Group();
+  reactorGroup.add(apertureGroup);
+
+  // Outer Heavy Palladium Triangle Plate
+  const triApertureGeo = new THREE.RingGeometry(11.5, 16.5, 3);
+  const triAperture = new THREE.Mesh(triApertureGeo, palladiumMat);
+  triAperture.position.z = 2.5;
+  apertureGroup.add(triAperture);
+
+  // Inner Inverted Neon Triangle Plate
+  const innerTriGeo = new THREE.RingGeometry(7.5, 10.5, 3);
+  const innerTri = new THREE.Mesh(innerTriGeo, laserEmitterMat);
+  innerTri.position.z = 3.0;
+  innerTri.rotation.z = Math.PI;
+  apertureGroup.add(innerTri);
+
+  // 3 Corner Confinement Spheres at Vertices
+  for (let c = 0; c < 3; c++) {
+    const cAngle = (c / 3) * Math.PI * 2 - Math.PI / 6;
+    const cSphereGeo = new THREE.SphereGeometry(1.6, 12, 12);
+    const cSphere = new THREE.Mesh(cSphereGeo, coreGlowMat);
+    cSphere.position.set(Math.cos(cAngle) * 14, Math.sin(cAngle) * 14, 3.2);
+    apertureGroup.add(cSphere);
+  }
+
+  // Rotating Nanotech Hex Glyph
+  const hexGeo = new THREE.RingGeometry(3.5, 5.5, 6);
+  const hexGlyph = new THREE.Mesh(hexGeo, neonCyanMat);
+  hexGlyph.position.z = 3.5;
+  apertureGroup.add(hexGlyph);
+
+  // 6. Glowing Fusion Plasma Core Spheres
+  const coreGroup = new THREE.Group();
+  reactorGroup.add(coreGroup);
+
+  const centerSphereGeo = new THREE.SphereGeometry(8.5, 32, 32);
+  const centerSphere = new THREE.Mesh(centerSphereGeo, coreGlowMat);
+  coreGroup.add(centerSphere);
+
+  const plasmaAuraGeo = new THREE.IcosahedronGeometry(13.2, 2);
+  const plasmaAura = new THREE.Mesh(plasmaAuraGeo, plasmaAuraMat);
+  coreGroup.add(plasmaAura);
+
+  const outerHaloGeo = new THREE.SphereGeometry(17, 24, 24);
+  const outerHalo = new THREE.Mesh(outerHaloGeo, outerHaloMat);
+  coreGroup.add(outerHalo);
+
+  const shieldCageGeo = new THREE.IcosahedronGeometry(21, 1);
+  const shieldCage = new THREE.Mesh(shieldCageGeo, neonCyanMat);
+  coreGroup.add(shieldCage);
+
+  // 7. Floating Quantum Swarm Embers (750 Particles)
+  const particleCount = 750;
+  const particleGeo = new THREE.BufferGeometry();
+  const particlePositions = new Float32Array(particleCount * 3);
+  const basePositions = new Float32Array(particleCount * 3);
+  const particleSpeeds = new Float32Array(particleCount);
+
+  for (let i = 0; i < particleCount; i++) {
+    const r = 22 + Math.random() * 56;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = (Math.random() - 0.5) * Math.PI * 0.8;
+
+    const x = r * Math.cos(theta) * Math.cos(phi);
+    const y = r * Math.sin(theta) * Math.cos(phi);
+    const z = r * Math.sin(phi);
+
+    particlePositions[i * 3] = x;
+    particlePositions[i * 3 + 1] = y;
+    particlePositions[i * 3 + 2] = z;
+
+    basePositions[i * 3] = x;
+    basePositions[i * 3 + 1] = y;
+    basePositions[i * 3 + 2] = z;
+
+    particleSpeeds[i] = 0.005 + Math.random() * 0.015;
+  }
+
+  particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+
+  const particleMat = new THREE.PointsMaterial({
+    size: 2.4,
+    color: 0x00f0ff,
+    transparent: true,
+    opacity: 0.88,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  });
+
+  const particleCloud = new THREE.Points(particleGeo, particleMat);
+  reactorGroup.add(particleCloud);
+
+  // Mouse Parallax & Interactive 3D Drag
+  let targetTiltX = 0;
+  let targetTiltY = 0;
+  let isDragging = false;
+  let prevMouseX = 0;
+  let prevMouseY = 0;
+  let dragRotX = 0;
+  let dragRotY = 0;
+  let mouseDownTime = 0;
+  let hasDragged = false;
+
+  window.addEventListener('mousemove', (e) => {
+    if (isDragging) {
+      const deltaX = e.clientX - prevMouseX;
+      const deltaY = e.clientY - prevMouseY;
+      if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) hasDragged = true;
+      dragRotY += deltaX * 0.012;
+      dragRotX += deltaY * 0.012;
+      prevMouseX = e.clientX;
+      prevMouseY = e.clientY;
+    } else {
+      const cx = window.innerWidth / 2;
+      const cy = window.innerHeight / 2;
+      targetTiltX = (e.clientY - cy) * 0.00065;
+      targetTiltY = (e.clientX - cx) * 0.00065;
+    }
+  });
+
+  renderer.domElement.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    hasDragged = false;
+    mouseDownTime = Date.now();
+    prevMouseX = e.clientX;
+    prevMouseY = e.clientY;
+  });
+
+  renderer.domElement.addEventListener('mouseup', () => {
+    if (!hasDragged && Date.now() - mouseDownTime < 280) {
+      triggerArcPulse();
+    }
+  });
+
+  window.addEventListener('mouseup', () => {
+    isDragging = false;
+  });
+
+  // Animation Loop with Audio Frequency Sync & Particle Wave
+  let clock = new THREE.Clock();
+
+  function animate() {
+    requestAnimationFrame(animate);
+
+    const delta = clock.getDelta();
+    const elapsedTime = clock.getElapsedTime();
+
+    // Decay repulsor pulse shockwave energy boost
+    if (pulseEnergyBoost > 0.01) {
+      pulseEnergyBoost *= 0.93;
+    } else {
+      pulseEnergyBoost = 0;
+    }
+
+    // Get live audio energy from TTS or Mic Analyser + pulse boost
+    const audioData = getLiveAudioEnergy();
+    const energy = Math.min(1.6, audioData.energy + pulseEnergyBoost);
+    const mode = audioData.mode;
+
+    // 1. Dynamic Mode Color Shifts
+    let targetColor = 0x00f0ff; // Standby / Stark Cyan
+    if (mode === 'speaking') {
+      targetColor = 0xffaa00; // Radiant Stark Gold-Amber
+    } else if (mode === 'recording') {
+      targetColor = 0xff2840; // High-Intensity Crimson Red
+    } else if (mode === 'thinking') {
+      targetColor = 0x88ffff; // Quantum Electric White-Cyan
+    }
+
+    coreLight.color.lerp(new THREE.Color(targetColor), 0.12);
+    particleMat.color.lerp(new THREE.Color(targetColor), 0.12);
+    outerRim.material.color.lerp(new THREE.Color(targetColor), 0.12);
+    laserEmitterMat.color.lerp(new THREE.Color(targetColor), 0.12);
+    plasmaAuraMat.color.lerp(new THREE.Color(targetColor), 0.12);
+
+    // 2. Multi-tier Counter-Rotating Rings
+    const baseSpeed = 0.6 + energy * 2.4;
+    compassRing.rotation.z += 0.002 * baseSpeed;
+    outerRim.rotation.z += 0.003 * baseSpeed;
+    coilGroup.rotation.z -= 0.005 * baseSpeed;
+    midRingGroup.rotation.z -= 0.009 * baseSpeed;
+    innerRingGroup.rotation.z += 0.014 * baseSpeed;
+    apertureGroup.rotation.z -= 0.008 * baseSpeed;
+    hexGlyph.rotation.z += 0.02 * baseSpeed;
+
+    // Authentic gyroscopic gimbal tilt oscillations
+    midRingGroup.rotation.x = Math.sin(elapsedTime * 1.5) * 0.14;
+    midRingGroup.rotation.y = Math.cos(elapsedTime * 1.2) * 0.14;
+    innerRingGroup.rotation.x = Math.cos(elapsedTime * 2.0) * 0.16;
+    shieldCage.rotation.y += 0.015 * baseSpeed;
+    shieldCage.rotation.x -= 0.01 * baseSpeed;
+
+    // 3. Audio-Reactive Core Pulsation
+    const corePulseScale = 1.0 + energy * 0.7 + Math.sin(elapsedTime * 3) * 0.04;
+    centerSphere.scale.set(corePulseScale, corePulseScale, corePulseScale);
+    plasmaAura.scale.set(corePulseScale * 1.1, corePulseScale * 1.1, corePulseScale * 1.1);
+    plasmaAura.rotation.y += 0.025;
+    plasmaAura.rotation.x += 0.015;
+
+    coreLight.intensity = 2.5 + energy * 6.0;
+
+    // 4. Particle Field Deformation via Audio Frequencies
+    const posAttr = particleGeo.attributes.position;
+    const freq = audioData.frequencies;
+    const freqCount = freq ? freq.length : 0;
+
+    for (let i = 0; i < particleCount; i++) {
+      const idx = i * 3;
+      const bx = basePositions[idx];
+      const by = basePositions[idx + 1];
+      const bz = basePositions[idx + 2];
+
+      const speed = particleSpeeds[i] * (1.0 + energy * 1.6);
+      const curX = posAttr.array[idx];
+      const curY = posAttr.array[idx + 1];
+      const cosA = Math.cos(speed);
+      const sinA = Math.sin(speed);
+
+      let rx = curX * cosA - curY * sinA;
+      let ry = curX * sinA + curY * cosA;
+      let rz = bz + Math.sin(elapsedTime * 2 + i) * 1.2;
+
+      let deform = 1.0;
+      if (freq && freqCount > 0) {
+        const binVal = freq[i % freqCount] / 255.0;
+        deform = 1.0 + (binVal * 0.5) + (energy * 0.35);
+      } else if (energy > 0.05) {
+        deform = 1.0 + (energy * 0.3 * Math.sin(elapsedTime * 4 + i));
+      }
+
+      posAttr.array[idx] = rx * deform;
+      posAttr.array[idx + 1] = ry * deform;
+      posAttr.array[idx + 2] = rz * deform;
+    }
+    posAttr.needsUpdate = true;
+
+    // 5. Parallax & Spring Tilt Interpolation
+    if (!isDragging) {
+      dragRotX += (0 - dragRotX) * 0.05;
+      dragRotY += (0 - dragRotY) * 0.05;
+    }
+    reactorGroup.rotation.x += (targetTiltX + dragRotX - reactorGroup.rotation.x) * 0.08;
+    reactorGroup.rotation.y += (targetTiltY + dragRotY - reactorGroup.rotation.y) * 0.08;
+
+    renderer.render(scene, camera);
+  }
+
+  animate();
+
+  // Responsive Resizing
+  window.addEventListener('resize', () => {
+    const newW = container.clientWidth || 270;
+    const newH = container.clientHeight || 270;
+    camera.aspect = newW / newH;
+    camera.updateProjectionMatrix();
+    renderer.setSize(newW, newH);
+  });
+}
+
+// ---------------------------------------------------------------------
+// STARK HUD INTERACTIVE FEATURES & TELEMETRY SPECTRUM
+// ---------------------------------------------------------------------
+
+// 1. Repulsor Click Pulse Shockwave
+let pulseEnergyBoost = 0;
+function triggerArcPulse() {
+  pulseEnergyBoost = 1.0;
+  playSound('pulse');
+  const arcElem = document.getElementById('arc');
+  if (arcElem) {
+    arcElem.classList.remove('arc-shockwave-active');
+    void arcElem.offsetWidth; // retrigger animation reflow
+    arcElem.classList.add('arc-shockwave-active');
+  }
+  const outVal = document.getElementById('r-output-val');
+  if (outVal) {
+    outVal.textContent = `${(4.85 + Math.random() * 0.4).toFixed(2)} GJ/s`;
+    outVal.style.color = 'var(--emerald)';
+    setTimeout(() => {
+      outVal.style.color = 'var(--cyan)';
+    }, 700);
+  }
+  appendDiagLog("Repulsor energy discharge pulsed.");
+}
+
+// 2. Arc Reactor Live Stats Fluctuation Timer
+let reactorStatsInterval = null;
+function initReactorFluctuations() {
+  if (reactorStatsInterval) clearInterval(reactorStatsInterval);
+  reactorStatsInterval = setInterval(() => {
+    const isSpeaking = currentAudioPlayer && !currentAudioPlayer.paused;
+    const isBusy = isRecording || isSpeaking || (state === 'thinking');
+    
+    // Output calculation
+    const baseOutput = 3.20 + Math.sin(Date.now() / 700) * 0.08 + (isBusy ? 0.65 : 0);
+    const outElem = document.getElementById('r-output-val');
+    if (outElem && pulseEnergyBoost < 0.2) {
+      outElem.textContent = `${baseOutput.toFixed(2)} GJ/s`;
+    }
+
+    // Frequency
+    const freqElem = document.getElementById('r-freq-val');
+    if (freqElem) {
+      const baseFreq = 432 + Math.floor(Math.sin(Date.now() / 500) * 3) + (isBusy ? 16 : 0);
+      freqElem.textContent = `${baseFreq} HZ`;
+    }
+
+    // Stability
+    const stabElem = document.getElementById('r-stab-val');
+    if (stabElem) {
+      const baseStab = 99.7 + Math.sin(Date.now() / 1100) * 0.2;
+      stabElem.textContent = `${baseStab.toFixed(1)}%`;
+    }
+  }, 400);
+}
+
+// 3. Live CPU Sparkline Spectrum (Canvas Histogram)
+let cpuHistory = new Array(36).fill(8);
+
+function pushCpuReading(val) {
+  cpuHistory.push(Number(val) || 0);
+  if (cpuHistory.length > 36) cpuHistory.shift();
+  drawCpuSparkline();
+}
+
+function drawCpuSparkline() {
+  const canvas = document.getElementById('cpu-sparkline');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  // Background subtle grid
+  ctx.strokeStyle = 'rgba(0, 240, 255, 0.08)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, h * 0.33); ctx.lineTo(w, h * 0.33);
+  ctx.moveTo(0, h * 0.66); ctx.lineTo(w, h * 0.66);
+  ctx.stroke();
+
+  if (cpuHistory.length < 2) return;
+
+  const step = w / (cpuHistory.length - 1);
+
+  // Gradient area
+  ctx.beginPath();
+  ctx.moveTo(0, h);
+  for (let i = 0; i < cpuHistory.length; i++) {
+    const val = Math.max(0, Math.min(100, cpuHistory[i]));
+    const x = i * step;
+    const y = h - (val / 100) * (h - 8) - 4;
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(w, h);
+  ctx.closePath();
+
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, 'rgba(0, 240, 255, 0.32)');
+  grad.addColorStop(1, 'rgba(0, 240, 255, 0.01)');
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Vibrant neon line
+  ctx.beginPath();
+  for (let i = 0; i < cpuHistory.length; i++) {
+    const val = Math.max(0, Math.min(100, cpuHistory[i]));
+    const x = i * step;
+    const y = h - (val / 100) * (h - 8) - 4;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.strokeStyle = '#00f0ff';
+  ctx.lineWidth = 1.8;
+  ctx.shadowColor = '#00f0ff';
+  ctx.shadowBlur = 6;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Leading glowing status point
+  const lastVal = Math.max(0, Math.min(100, cpuHistory[cpuHistory.length - 1]));
+  const lastX = w - 1;
+  const lastY = h - (lastVal / 100) * (h - 8) - 4;
+  ctx.fillStyle = '#00ff88';
+  ctx.beginPath();
+  ctx.arc(lastX, lastY, 3, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function initCpuSparkline() {
+  const canvas = document.getElementById('cpu-sparkline');
+  if (canvas) {
+    canvas.width = canvas.parentElement.clientWidth ? (canvas.parentElement.clientWidth - 24) : 310;
+    canvas.height = 50;
+  }
+  drawCpuSparkline();
+}
+
+// 5. Optics Viewport Reticle Tracking & Lightbox Modal
+function setupOpticsInteractivity() {
+  const frame = document.getElementById('optics-viewport-frame');
+  const coords = document.getElementById('optics-coords');
+  if (frame && coords) {
+    frame.addEventListener('mousemove', (e) => {
+      const rect = frame.getBoundingClientRect();
+      const x = Math.max(0, Math.round(e.clientX - rect.left));
+      const y = Math.max(0, Math.round(e.clientY - rect.top));
+      coords.textContent = `LOC: ${x}, ${y}`;
+    });
+  }
+}
+
+function openOpticsModal() {
+  const img = document.getElementById('optics-img');
+  if (!img || !img.src || img.style.display === 'none') return;
+  const modal = document.getElementById('optics-modal');
+  const modalImg = document.getElementById('optics-modal-img');
+  const label = document.getElementById('optics-modal-label');
+  const tag = document.getElementById('optics-tag');
+  if (modal && modalImg) {
+    modalImg.src = img.src;
+    if (label && tag && tag.textContent) {
+      label.textContent = `OPTICAL INTEL // ${tag.textContent}`;
+    }
+    modal.classList.add('open');
+    playSound('beep');
+  }
+}
+
+function closeOpticsModal() {
+  const modal = document.getElementById('optics-modal');
+  if (modal) modal.classList.remove('open');
+  playSound('click');
+}
+
+// 6. Interactive Suggestion Chips & Chat Stream Cleaner
+function appendSuggestionChips(container = null, customChips = null) {
+  document.querySelectorAll('.suggestion-chips').forEach(el => el.remove());
+
+  const chips = customChips || [
+    { label: "🌅 Executive Briefing", cmd: "Deliver my morning executive briefing." },
+    { label: "📱 WhatsApp", cmd: "Check my WhatsApp messages and recent history." },
+    { label: "📸 Instagram DMs", cmd: "Check my Instagram direct messages and unread DMs." },
+    { label: "💬 Chat with Friends", cmd: "Converse with my Instagram friends who sent messages, continuing our conversations properly." },
+    { label: "👁️ Neural Scan", cmd: "Perform an optical neural scan of the display and detect all interactive buttons and elements." },
+    { label: "⚡ System Diagnostics", cmd: "Status report on system diagnostics, CPU, RAM, and battery." },
+    { label: "🧠 Open Cortex", cmd: "open_memory" },
+    { label: "🚀 Antigravity Prompts", cmd: "Generate Antigravity prompts and commands to improve the project." }
+  ];
+
+  const chipsRow = document.createElement('div');
+  chipsRow.className = 'suggestion-chips';
+
+  chips.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'chip-btn';
+    btn.textContent = c.label;
+    btn.onclick = () => {
+      if (c.cmd === 'open_memory') {
+        openMemoryDrawer();
+      } else {
+        quickAction(c.cmd);
+      }
+    };
+    chipsRow.appendChild(btn);
+  });
+
+  const target = container || document.getElementById('chat-log');
+  if (target) {
+    target.appendChild(chipsRow);
+    target.scrollTop = 1e9;
+  }
+}
+
+function restoreChatHistory(messages) {
+  if (!messages || messages.length === 0) return;
+  const chatLog = document.getElementById('chat-log');
+  if (!chatLog) return;
+  chatLog.innerHTML = '';
+  messages.forEach(m => {
+    const role = (m.role === 'jarvis' || m.role === 'assistant') ? 'jarvis' : 'user';
+    const text = m.text || m.content || '';
+    if (!text.trim()) return;
+    const d = document.createElement('div');
+    d.className = `bubble ${role}`;
+    d.textContent = text;
+    chatLog.appendChild(d);
+  });
+  appendSuggestionChips();
+  chatLog.scrollTop = 1e9;
+  appendDiagLog(`Restored ${messages.length} persistent chat messages from SQLite cortex.`);
+}
+
+function clearChatLog() {
+  const chatLog = document.getElementById('chat-log');
+  if (!chatLog) return;
+  chatLog.innerHTML = `
+    <div class="bubble jarvis">
+      Stream cleared, Sir. J.A.R.V.I.S. is ready for your next directive.
+    </div>
+  `;
+  appendSuggestionChips();
+  sendWS({ type: 'clear_chat' });
+  playSound('chime');
+  appendDiagLog("Chat stream and SQLite memory cortex purged.");
+}
+
+// Initialize on DOM Ready
+function bootJarvis() {
+  connectWebSocket();
+  initArcReactor3D();
+  initCpuSparkline();
+  setupOpticsInteractivity();
+  initReactorFluctuations();
+  appendSuggestionChips();
+  initWakeWordListener();
+  updateAudioDevices().catch(() => {});
+}
+
+document.addEventListener('click', () => {
+  if (wakeWordActive && !isSpeechRecognizing && !isRecording && (!currentAudioPlayer || currentAudioPlayer.paused)) {
+    safeStartSpeechRecognition();
+  }
+});
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bootJarvis);
+} else {
+  bootJarvis();
+}
+
+</script>
+</body>
+</html>
