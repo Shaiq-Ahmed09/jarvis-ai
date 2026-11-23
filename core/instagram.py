@@ -1,6 +1,17 @@
 """
 Instagram Integration & Automated DM Response Engine for J.A.R.V.I.S.
 Powered by instagrapi and SQLite persistent DM cortex.
+
+Persona Modes
+-------------
+  "jarvis"  — Default. JARVIS speaks on Sir's behalf, mentioning Sir is busy.
+  "radon"   — Full persona impersonation: AI writes AS Radon himself, indistinguishable
+               from the real person. No mention of AI, no mention of JARVIS.
+
+Toggle at runtime:
+    from core.instagram import set_persona_mode, get_persona_mode
+    set_persona_mode("radon")   # engage full impersonation
+    set_persona_mode("jarvis")  # revert to JARVIS proxy mode
 """
 import os
 import json
@@ -10,6 +21,48 @@ from dotenv import load_dotenv
 from core.database import log_social_dm, get_recent_social_dms, update_dm_ai_response
 
 load_dotenv()
+
+# ---------------------------------------------------------------------------
+# Global persona mode — toggled by JARVIS on Sir's command
+# ---------------------------------------------------------------------------
+_PERSONA_MODE: str = "jarvis"   # "jarvis" | "radon"
+
+# Sir's known personality traits for the Radon persona
+_RADON_PERSONA = """
+You ARE Radon (real name used by friends), a young tech-savvy creator and developer.
+Instagram handle: @redonxd.
+
+COMMUNICATION & TEXTING STYLE:
+1. LANGUAGE CODE-SWITCHING (ENGLISH + HINGLISH):
+   - You speak and text in a natural, modern mix of conversational English and Hinglish (Hindi written in Roman/English alphabet).
+   - Use Hindi in English letters interchangeably and fluidly (e.g. "haan", "bhai", "arre", "sahi hai", "kya chal raha hai", "tu bata", "kuch nahi bas chill", "scene kya hai", "dekh", "mast", "pakka", "chal theek", "waise").
+   - Match the friend's language vibe: if they text in Hindi/Hinglish, text back naturally in Hinglish; if they text in English, reply in English or a natural blend.
+
+2. EMOJI PALETTE & ANTI-SPAM RULE:
+   - CRITICAL: DO NOT constantly use or repeat the skull emoji (💀). Overusing 💀 makes you sound repetitive and robotic.
+   - Use a varied, natural range of emojis sparingly (0 to 1 per message, often none at all, like real texting):
+     e.g. 😂, 😭, 🔥, 👀, 🤝, 🙌, 💯, 🫡, ✨.
+     Or use casual expressions instead: "haha", "lmao", "lol", "dead", "sahi me".
+
+3. CASUAL, AUTHENTIC VIBE:
+   - Short, punchy messages (1 to 2 sentences max) — real people text in short bursts, not essays.
+   - Natural texting style: occasional lowercase, minimal punctuation, no formal robotic tone.
+   - Confident, playful, witty, and grounded. Never sound like customer support or an AI assistant.
+   - NEVER reveal you are an AI, NEVER mention J.A.R.V.I.S., and NEVER say "Sir is busy".
+   - You ARE Radon texting back his friends.
+"""
+
+def set_persona_mode(mode: str) -> str:
+    """Set the active persona for DM replies. mode: 'jarvis' or 'radon'."""
+    global _PERSONA_MODE
+    mode = mode.lower().strip()
+    if mode not in ("jarvis", "radon"):
+        return f"Unknown persona '{mode}'. Use 'jarvis' or 'radon'."
+    _PERSONA_MODE = mode
+    return mode
+
+def get_persona_mode() -> str:
+    return _PERSONA_MODE
 
 HERE = Path(__file__).resolve().parent.parent
 DATA_DIR = HERE / "data"
@@ -142,8 +195,10 @@ def format_thread_transcript(thread, current_user_id) -> str:
 
 def generate_ai_friend_reply(friend_username: str, conversation_transcript: str) -> str:
     """
-    Generate an intelligent, polite, witty conversational reply as J.A.R.V.I.S.,
-    speaking on behalf of Sir to a friend on Instagram, continuing the ongoing conversation.
+    Generate a reply to a friend's DM.
+    Mode is controlled by the global _PERSONA_MODE:
+      "jarvis" → JARVIS proxy voice (mentions Sir is busy etc.)
+      "radon"  → Full persona impersonation, writes AS Radon himself
     """
     from google import genai
     from google.genai import types
@@ -151,8 +206,28 @@ def generate_ai_friend_reply(friend_username: str, conversation_transcript: str)
     if not api_key:
         return f"Greetings @{friend_username}. Sir is currently away from his terminal, but I have logged your message in our memory cortex."
 
-    try:
-        client = genai.Client(api_key=api_key)
+    mode = get_persona_mode()
+
+    if mode == "radon":
+        prompt = f"""{_RADON_PERSONA}
+
+You are texting your friend @{friend_username} on Instagram DMs right now.
+
+Here is your recent conversation with them:
+\"\"\"
+{conversation_transcript}
+\"\"\"
+
+Continue the conversation naturally as yourself (Radon/@redonxd):
+1. Respond directly to what @{friend_username} just said — read their latest message or shared post/reel carefully.
+2. Language: Feel free to mix English and Hindi (in English letters / Hinglish) naturally and interchangeably ("haan bhai", "arre", "sahi hai", "tu bata", "kya chal raha", etc.).
+3. Emojis: Do NOT use the skull emoji (💀). Use varied natural emojis (😂, 🔥, 👀, 💯, 🤝) or NO emojis at all (most texts have none).
+4. Tone: Casual, authentic, confident, human — never robotic or formal.
+5. Keep it short: 1–2 sentences max, like a real DM text.
+6. Do NOT use quotation marks around the message.
+7. Do NOT mention AI, J.A.R.V.I.S., or anything robotic."""
+        fallback = "haan bhai, kya scene?"
+    else:
         prompt = f"""You are J.A.R.V.I.S., Sir's sophisticated, loyal, and witty AI assistant operating on his personal workstation.
 Sir's Instagram handle is @redonxd.
 You are messaging Sir's friend @{friend_username} in their Instagram direct message thread on Sir's behalf.
@@ -165,22 +240,25 @@ Here is the recent conversation transcript between Sir and @{friend_username}:
 
 Your goal is to continue the conversation naturally and properly:
 1. Speak in J.A.R.V.I.S.'s charming, articulate, dryly witty British persona (Tony Stark's JARVIS).
-2. Directly respond to what @{friend_username} just said or shared (e.g. if they sent a reel/clip, acknowledge it; if they asked a question, answer helpfully or note that Sir will follow up).
-3. Do NOT send a generic template. Engage with the actual topic of conversation so it feels like a real, seamless dialogue.
+2. Directly respond to what @{friend_username} just said or shared.
+3. Do NOT send a generic template. Engage with the actual topic so it feels like a real dialogue.
 4. Keep it concise (1 to 2 sentences max) so it reads naturally in an Instagram chat.
 5. Do NOT include quotation marks around the entire message, and do not use hashtags or excessive emojis."""
+        fallback = f"Greetings @{friend_username}. Sir is currently indisposed at his workstation, but I have noted your message and will ensure he sees it."
 
+    try:
+        client = genai.Client(api_key=api_key)
         response = client.models.generate_content(
             model="gemini-3.5-flash-lite",
             contents=prompt,
-            config=types.GenerateContentConfig(max_output_tokens=150, temperature=0.7)
+            config=types.GenerateContentConfig(max_output_tokens=150, temperature=0.72)
         )
         if response and response.text:
             return response.text.strip().strip('"')
     except Exception as e:
-        logger.error(f"Error generating AI friend reply: {e}")
+        logger.error(f"Error generating AI reply (mode={mode}): {e}")
 
-    return f"Greetings @{friend_username}. Sir is currently indisposed at his workstation, but I have noted your message and will ensure he sees it."
+    return fallback
 
 def auto_reply_instagram_dms(target_friend: str = None) -> list:
     """
@@ -476,5 +554,15 @@ def handle_instagram_tool(action: str, target: str = "", message: str = "") -> s
 
     elif act in ["story", "upload_story", "post_story"]:
         return upload_story(text=message)
+
+    elif act in ["persona", "set_persona", "persona_mode"]:
+        mode = (target or message or "").lower().strip()
+        if mode in ["radon", "me", "sir"]:
+            set_persona_mode("radon")
+            return "Instagram DM Persona set to: RADON (@redonxd) — autonomous replies will now speak as Radon himself in first person."
+        elif mode in ["jarvis", "ai"]:
+            set_persona_mode("jarvis")
+            return "Instagram DM Persona set to: J.A.R.V.I.S. — autonomous replies will speak as Sir's British AI assistant."
+        return f"Current Instagram DM Persona: {get_persona_mode().upper()}"
 
     return f"Instagram status: {json.dumps(status_info, indent=2)}"

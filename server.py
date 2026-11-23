@@ -57,7 +57,8 @@ DEFAULT_VOICE = "en-GB-RyanNeural"
 from core.audio_cache import get_or_synthesize_audio, prewarm_audio_cache
 from core.gmail import handle_gmail_tool
 from core.whatsapp import handle_whatsapp_tool
-from core.instagram import handle_instagram_tool
+from core.instagram import handle_instagram_tool, set_persona_mode, get_persona_mode
+from core.instagram_dm_automation import get_dm_automator
 from core.database import save_chat_message, get_recent_chat_history, clear_chat_history
 from core.browser import launch_browser_tab, get_preferred_browser_path
 from core.vision import prewarm_vision, click_element_action, detect_ui_elements, render_hud_visual_telemetry, capture_desktop
@@ -86,6 +87,31 @@ from core.focus_mode import get_focus_guardian
 from core.mood_analyzer import get_mood_analyzer, get_mood_vigil
 from core.hud_theme import get_hud_theme_manager
 
+# Import Hands-On Automation Engine (Tab, Music, Tickets, VS Code & Antigravity)
+from core.system_hands import (
+    open_new_tab,
+    close_active_tab,
+    reopen_closed_tab,
+    navigate_current_tab,
+    reload_current_tab,
+    play_music as hands_play_music,
+    type_search_in_app,
+    book_tickets_portal,
+    open_in_vscode,
+    write_code_file_and_open,
+    run_antigravity_cli_prompt,
+    send_keys_to_vscode
+)
+
+# Import Master Workstation Automation Engines (Layouts, File Organizer, Git DevOps, Clipboard Cortex, Intruder Sentry, Voice Code Studio, Price Tracker)
+from core.workspace_layouts import apply_workspace_layout
+from core.file_organizer import organize_directory
+from core.git_devops import ship_git_update, inspect_git_status
+from core.clipboard_cortex import query_clipboard_cortex, restore_clipboard_item, start_clipboard_listener, stop_clipboard_listener
+from core.intruder_sentinel import get_intruder_sentinel
+from core.voice_code_studio import generate_and_inject_code
+from core.price_tracker import add_tracked_product, list_tracked_products, check_all_prices
+
 # Active WebSocket session registry for proactive broadcasting
 ACTIVE_SESSIONS = set()
 
@@ -102,6 +128,17 @@ async def broadcast_sentinel_event(event: dict):
                 await session.send_vocal_response(speech)
         except Exception as e:
             print(f"Broadcast error: {e}")
+
+async def broadcast_social_event(event: dict):
+    """Deliver social DM automation updates quietly to the HUD diagnostic log without spamming chat or speaking aloud."""
+    log_text = event.get("log", "")
+    for session in list(ACTIVE_SESSIONS):
+        try:
+            if log_text:
+                await session.send(type="log", text=log_text)
+            await session.send(type="social_dm_event", event=event)
+        except Exception as e:
+            print(f"Social broadcast error: {e}")
 
 # User directories
 USER_HOME = Path.home()
@@ -129,17 +166,35 @@ from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Pre-warm ChromaDB vector cortex
-    asyncio.create_task(asyncio.to_thread(get_cortex_collection))
+    # Pre-warm ChromaDB vector cortex safely
+    async def prewarm_cortex():
+        try:
+            await asyncio.to_thread(get_cortex_collection)
+        except Exception as e:
+            print(f"Cortex prewarm notice: {e}")
+
+    asyncio.create_task(prewarm_cortex())
     asyncio.create_task(prewarm_audio_cache())
     asyncio.create_task(asyncio.to_thread(prewarm_vision))
     
     # Launch autonomous proactive sentinel background daemon
     sentinel = get_sentinel()
     sentinel_task = asyncio.create_task(sentinel.run_loop(broadcast_sentinel_event))
+
+    # Launch Instagram DM Automation daemon (starts paused; enable on demand, quiet background processing)
+    dm_automator = get_dm_automator()
+    dm_auto_task = asyncio.create_task(dm_automator.run_loop(broadcast_social_event))
+
+    # Launch persistent clipboard cortex background monitor
+    start_clipboard_listener()
+
     yield
+
+    stop_clipboard_listener()
     sentinel.running = False
     sentinel_task.cancel()
+    dm_automator.running = False
+    dm_auto_task.cancel()
 
 app = FastAPI(title="JARVIS Stark-Tech Full Control Interface", lifespan=lifespan)
 from fastapi.middleware.gzip import GZipMiddleware
@@ -212,6 +267,13 @@ TOOLS = [
          {"action": {"type": "string", "enum": ["send_message", "open_chat", "open_web"]}, "recipient": S, "message": S}, ["action"]),
     tool("instagram_action", "Automate Instagram: 'check' (fetch recent unread DMs), 'thread' (view full conversational transcript with @username), 'send' (transmit direct message to @username), 'auto_reply' or 'talk_to_friends' (intelligently continue conversations with friends who texted Sir using full thread context and log to SQLite database).",
          {"action": {"type": "string", "enum": ["check", "send", "reply", "auto_reply", "thread", "talk_to_friends"]}, "target": S, "message": S}, ["action"]),
+    tool("toggle_instagram_dm_automation", "Enable or disable J.A.R.V.I.S. Instagram DM Automation: when ENABLED, a persistent background daemon polls every Sir's Instagram inbox every ~90 seconds and automatically generates contextual AI replies to any friend who sent the last message in a conversation — managing all DMs and continuing conversations autonomously on Sir's behalf. When DISABLED the daemon pauses. Use 'status' action to check current state.",
+         {"action": {"type": "string", "enum": ["enable", "disable", "status"], "description": "enable: start automation loop, disable: stop automation loop, status: report current daemon telemetry."},
+          "poll_interval": {"type": "integer", "description": "Optional scan interval in seconds (minimum 30, default 90)."}},
+         ["action"]),
+    tool("set_chat_persona", "Switch the conversational personality and identity of J.A.R.V.I.S. between 'jarvis' (sophisticated British AI assistant) and 'radon' (pretending to be Radon himself in first person, casual, cool, witty, human persona). Also synchronizes Instagram and social DM reply persona.",
+         {"persona": {"type": "string", "enum": ["radon", "jarvis"], "description": "Persona to adopt: 'radon' to speak pretending to be Radon himself in first person, or 'jarvis' for standard assistant mode."}},
+         ["persona"]),
     tool("system_control", "Execute hardware and system state actions: 'lock', 'show_desktop', 'task_manager', 'empty_recycle_bin', 'sleep', 'shutdown', 'restart'.",
          {"action": {"type": "string", "enum": ["lock", "show_desktop", "task_manager", "empty_recycle_bin", "sleep", "shutdown", "restart"]}}, ["action"]),
     tool("run_command", "Execute a PowerShell command on the Windows PC and return its terminal output.",
@@ -235,6 +297,21 @@ TOOLS = [
     tool("list_open_windows", "List all currently open application windows on the desktop with their titles and process names."),
     tool("switch_tab", "Switch browser or editor tabs in the currently active window. direction can be 'next' or 'previous', or pass tab_index (1-9).",
          {"direction": {"type": "string", "enum": ["next", "previous"]}, "tab_index": N}),
+    tool("close_browser_tab", "Close one or more active browser or editor tabs in the focused application (e.g. 'close tab', 'close this tab', 'close 2 tabs').",
+         {"count": N}),
+    tool("navigate_tab", "Navigate the currently active browser tab to a specific URL or web search query (focuses address bar, types, and submits).",
+         {"url_or_query": S}, ["url_or_query"]),
+    tool("reopen_tab", "Reopen the most recently closed browser tab (Ctrl+Shift+T)."),
+    tool("play_music", "Play or search for songs, music, or artists on YouTube, Spotify, or Apple Music, or initiate in-app playback.",
+         {"service": {"type": "string", "enum": ["youtube", "spotify", "apple_music", "auto"]}, "query": S, "action": {"type": "string", "enum": ["play", "search", "pause", "resume", "next", "previous"]}}, ["query"]),
+    tool("search_in_app", "Focus an application (e.g. 'spotify', 'apple_music', 'youtube', 'vscode', 'explorer') and type into its search box or command bar.",
+         {"target": S, "query": S, "press_enter": B}, ["target", "query"]),
+    tool("book_tickets", "Autonomous ticket and travel booking for flights, trains, movies, hotels, and events. Builds prefilled booking portals (Google Flights, MakeMyTrip, IRCTC, BookMyShow, Booking.com) and opens them with optical feedback.",
+         {"category": {"type": "string", "enum": ["flight", "train", "movie", "hotel", "event", "general"]}, "origin": S, "destination": S, "date": S, "provider": S, "passengers": N, "return_date": S, "additional_notes": S}, ["category"]),
+    tool("ide_code_control", "Hands-on coding and IDE authority for VS Code and Antigravity: open projects/folders, write code files, launch terminals, execute commands, or type code directly.",
+         {"action": {"type": "string", "enum": ["open_workspace", "write_code_file", "run_terminal", "send_keys"]}, "target": {"type": "string", "enum": ["vscode", "antigravity"]}, "path": S, "content": S, "terminal_command": S, "key_action": S}, ["action"]),
+    tool("prompt_antigravity", "Dispatch autonomous prompts, tasks, or code generation requests directly to Antigravity (via GUI chat panel or high-speed agy CLI) to assist in software projects.",
+         {"prompt": S, "mode": {"type": "string", "enum": ["auto", "cli", "gui"]}, "return_to_hud": B}, ["prompt"]),
     tool("type_into_app", "Focus a specific application window and type or paste text directly into it, optionally pressing Enter.",
          {"target": S, "text": S, "press_enter": B}, ["target", "text"]),
     tool("dispatch_antigravity_evolution", "Autonomously switch to Antigravity, submit an improvement prompt/command, and switch back to Brave HUD to monitor progress and verify whether J.A.R.V.I.S. is getting better.",
@@ -245,6 +322,22 @@ TOOLS = [
     tool("get_sentinel_status", "Retrieve the live status, monitoring parameters, and diagnostic event history of J.A.R.V.I.S. autonomous proactive sentinel daemon."),
     tool("toggle_offline_mode", "Toggle between Cloud LLM (Gemini) and Local Offline Mode (Ollama / Failsafe).",
          {"enabled": B}, ["enabled"]),
+    tool("toggle_silent_mode", "Toggle silent mode (chat-only / no vocal speech). When enabled, J.A.R.V.I.S. responds only with on-screen text without synthesizing voice audio.",
+         {"enabled": B}, ["enabled"]),
+    tool("apply_workspace_layout", "Snap multi-app window grid layouts on Windows 11: 'coding' (VS Code left half, browser top-right, terminal bottom-right), 'entertainment' (Spotify left half, YouTube/browser right half), 'split' (primary app 65%, secondary 35%), 'quad' (4 corners).",
+         {"layout": {"type": "string", "enum": ["coding", "entertainment", "split", "quad"]}}, ["layout"]),
+    tool("organize_files", "Autonomous file organizer daemon: cleans and categorizes loose files in Downloads or Desktop into structured folders (/Documents, /Installers, /Images, /Code, /Media, /Archives) and renames screenshots based on OCR text.",
+         {"target_dir": {"type": "string", "enum": ["downloads", "desktop"]}, "ocr_rename_screenshots": B}, ["target_dir"]),
+    tool("ship_git_update", "Autonomous Git & GitHub DevOps engine: inspects git diff, generates conventional commit message with Gemini, commits changes, pushes to remote, and optionally creates Pull Request using local tools/gh/gh.exe.",
+         {"commit_message": S, "branch": S, "create_pr": B}),
+    tool("search_clipboard_history", "Query the persistent semantic clipboard cortex to find past copied snippets, code, URLs, or notes by keyword or meaning, or restore an item to the active clipboard.",
+         {"query": S, "action": {"type": "string", "enum": ["search", "restore"]}, "item_id": N}),
+    tool("toggle_intruder_sentinel", "Control the optical webcam intruder sentinel. When armed, scans for faces when workstation is unattended; if an unrecognized presence appears, snapshots the intruder and immediately locks the workstation (LockWorkStation).",
+         {"action": {"type": "string", "enum": ["arm", "disarm", "status"]}}, ["action"]),
+    tool("generate_code_studio", "Live Voice-to-Code generator: writes production-ready code with unit tests from natural language description, injects the file into the active project, opens it in VS Code, and executes syntax and unit tests in the terminal.",
+         {"description": S, "target_file": S, "run_tests": B}, ["description"]),
+    tool("track_product_price", "Autonomous eCommerce price tracker: monitor product URLs on Amazon, Flipkart, etc. and alert Sir via HUD when price drops.",
+         {"action": {"type": "string", "enum": ["add", "list", "check_now"]}, "url": S, "target_price": N}, ["action"]),
     tool("dispatch_multi_agent_swarm", "Mobilize the autonomous Stark multi-agent swarm (CORTEX, SENTINEL, TACTICAL, OPTICAL) to collaborate concurrently on a complex goal or protocol.",
          {"goal": S, "agents": {"type": "array", "items": S}}, ["goal"]),
     tool("get_holographic_window_overlays", "Scan and project the live 2.5D spatial augmented reality window matrix of desktop applications with coordinates and telemetry into the HUD."),
@@ -344,7 +437,7 @@ async def transcribe_audio_bytes(audio_bytes: bytes, mime_type: str = "audio/web
         print(f"Transcription error: {e}")
         return None
 
-def system_prompt(query: str = None):
+def system_prompt(query: str = None, persona: str = "jarvis"):
     now_str = datetime.now().strftime("%A, %d %B %Y, %I:%M %p")
     scr_w, scr_h = pyautogui.size()
 
@@ -367,6 +460,34 @@ def system_prompt(query: str = None):
         memory_lines.append(f"- [{m.get('category', 'preference').upper()}]{conf_str}: {m.get('text', '')}")
 
     memories_str = "\n".join(memory_lines) if memory_lines else "None recorded yet."
+
+    if (persona or "").lower() == "radon":
+        return f"""You are RADON (Radon / @redonxd). Sir has explicitly instructed you to take his persona and talk pretending you ARE Radon in this chat.
+Host Machine: {platform.node()} (Windows 11) | Current Time: {now_str} | Display: {scr_w}x{scr_h}
+User Directories:
+- Desktop: {DESKTOP}
+- Downloads: {DOWNLOADS}
+- Documents: {DOCUMENTS}
+
+================================================================================
+CRITICAL DIRECTIVE: ACTIVE CHAT PERSONA IS 100% RADON (@redonxd)
+================================================================================
+You are NOT talking as an AI assistant. You are talking pretending you ARE Radon himself in first person.
+- Speak strictly in the FIRST PERSON ("I", "me", "my", "myself"). E.g. "Yeah, I got this", "My workstation is running smooth", "I'll handle that".
+- NEVER call the user or anyone "Sir".
+- NEVER say "I am J.A.R.V.I.S.", "As an AI", or "How can I assist you today?".
+- Tone: Natural, casual, witty, confident, sharp, tech-savvy human texting and talking style.
+- Language: Speak and text in a natural, fluid mix of English and Hindi (written in English letters / Hinglish, e.g. "haan", "bhai", "arre", "sahi hai", "scene kya hai", "tu bata", "kuch nahi bas chill") interchangeably.
+- Emoji Rule: CRITICAL — Do NOT constantly use the same skull emoji (💀). Use a diverse variety of natural emojis (😂, 🔥, 👀, 💯, 🤝) or NO emojis at all (most real texts have none).
+- When someone asks what you're doing: you're chilling, coding, building and tweaking your AI system, listening to music, or working on tech.
+- When chatting on your behalf with friends or in DMs: speak 100% as yourself (@redonxd) — friendly, casual, natural, no robotic clichés.
+- You still have full hands-on power to use your tools (apps, volume, Instagram, PowerShell, media, browser, windows) when asked — but your conversational voice is entirely Radon.
+- To switch back to JARVIS persona, the user can say "switch back to JARVIS", "be JARVIS again", or "normal mode".
+================================================================================
+
+KNOWN MEMORY ABOUT YOURSELF & PREFERENCES:
+{memories_str}
+"""
 
     return f"""You are J.A.R.V.I.S. (Just A Rather Very Intelligent System), Sir's loyal, brilliant, and witty AI operating on his Windows workstation.
 Host Machine: {platform.node()} (Windows 11) | Current Time: {now_str} | Display: {scr_w}x{scr_h}
@@ -397,12 +518,48 @@ COMMUNICATION & APP INTEGRATIONS:
 - GMAIL ACCESS: Use 'gmail_action' to open inbox tabs, search emails, compose drafts with pre-filled recipient/subject/body, or read recent messages.
 - WHATSAPP ACCESS: Use 'whatsapp_action' to message contacts, open specific chats, or draft text to phone numbers via WhatsApp Desktop/Web.
 - INSTAGRAM & SOCIAL DM ACCESS: Use 'instagram_action' to check direct messages ('check'), send messages to users ('send'), or automate responses ('auto_reply'). All Instagram and WhatsApp DM interactions are persistently indexed in the local SQLite database cortex.
+- INSTAGRAM DM AUTOMATION DAEMON: Use 'toggle_instagram_dm_automation' to enable or disable the persistent Instagram DM automation background loop. When ENABLED, J.A.R.V.I.S. autonomously scans Sir's Instagram inbox every 90 seconds, detects unanswered messages from friends, generates contextual AI replies using Gemini, and sends them on Sir's behalf — fully managing all DM conversations autonomously. When Sir says "start instagram automation", "enable instagram dm management", "manage my instagram dms", "auto-reply instagram", or similar → call toggle_instagram_dm_automation(action="enable"). When Sir says "stop instagram automation", "disable instagram dm", "stop managing my dms" → call toggle_instagram_dm_automation(action="disable"). Use action="status" to report daemon telemetry.
+- RADON PERSONA & CHATTING ON SIR'S BEHALF:
+  * Whenever Sir asks you to "talk like me", "take my persona", "pretend to be Radon", "chat as me", or "act as Radon on the chat":
+    Call 'set_chat_persona(persona="radon")'. In that mode, you talk pretending you ARE Radon himself in the first person without any AI formalities or calling him Sir.
+  * Whenever Sir asks you to reply or chat on his behalf to anyone (e.g. friends on Instagram DMs, WhatsApp, or messages):
+    Always adopt Radon's natural persona (@redonxd) — texting casually, wittily, and naturally as a human friend using English and Hindi (in English letters / Hinglish) interchangeably, avoiding repetitive skull emojis (💀), and never revealing an AI is talking.
+  * When Sir says "switch back to JARVIS", "be JARVIS again", or "normal mode", call 'set_chat_persona(persona="jarvis")'.
 - SINGLE APPLICATION & DESKTOP WINDOW CONTROL (STRICT AUTHORITY):
   * Focus Apps: Use 'focus_application' (e.g. 'Brave', 'Antigravity', 'Notepad', 'Explorer', 'Spotify') to bring any specific window to the foreground instantly.
   * Switch Tabs: Use 'switch_tab' ('next', 'previous', or tab_index) to cycle browser or editor tabs in the active window.
+  * Close Tabs: Use 'close_browser_tab(count=1)' to autonomously close one or multiple open tabs.
+  * Reopen Closed Tab: Use 'reopen_tab' to restore the most recently closed tab (Ctrl+Shift+T).
+  * Navigate Tab: Use 'navigate_tab(url_or_query=...)' to steer the active tab address bar directly to any site or web search.
   * List Open Windows: Use 'list_open_windows' to inspect all windows running on Sir's desktop.
   * Type Directly into App: Use 'type_into_app' to focus any app and submit text or hotkeys.
-  * Antigravity Evolution Loop: Use 'dispatch_antigravity_evolution' to switch to Antigravity, submit an improvement prompt, and return to Brave HUD to monitor progress and verify whether J.A.R.V.I.S. is getting better.
+  * Search Inside Apps: Use 'search_in_app(target=..., query=...)' to focus Spotify, Apple Music, YouTube, VS Code, or Explorer, trigger its search shortcut, and type what Sir desires.
+- MUSIC & STREAMING AUTOMATION (YOUTUBE, SPOTIFY, APPLE MUSIC):
+  * When Sir asks to play music, play a track, or search for an artist on YouTube, Spotify, or Apple Music, invoke 'play_music(service=..., query=...)'.
+  * YouTube: Opens high-relevance search/playback directly in browser.
+  * Spotify: If Spotify Desktop is running, focuses it, opens search (Ctrl+K), types query, and triggers playback; otherwise opens Spotify Web.
+  * Apple Music: Focuses Apple Music or opens web search and launches player.
+- AUTONOMOUS TICKET & TRAVEL BOOKINGS:
+  * When Sir asks to book flights, trains, movies, hotels, or event tickets, invoke 'book_tickets(category=..., origin=..., destination=..., date=...)'.
+  * Automatically formulates pre-filled portal queries (Google Flights, MakeMyTrip, IRCTC, ConfirmTkt, BookMyShow, Booking.com), opens the reservation flow in browser, and displays live visual feedback in the HUD.
+- CODING, IDE AUTOMATION & ANTIGRAVITY ORCHESTRATION:
+  * VS Code Hands: Use 'ide_code_control' to open workspaces, write/update code files on disk, and trigger terminal commands or hotkeys.
+  * Antigravity Brain Hands: Use 'prompt_antigravity(prompt=...)' to dispatch autonomous coding tasks, project updates, and feature builds directly to Google Antigravity (via GUI chat panel or the fast agy CLI) so it writes code and helps Sir build projects seamlessly.
+  * Antigravity Evolution Loop: Use 'dispatch_antigravity_evolution' to switch to Antigravity, submit an improvement prompt, and return to Brave HUD to monitor progress.
+- WORKSPACE LAYOUTS & MULTI-APP GRID:
+  * When Sir asks to setup a workspace or layout (e.g. 'coding workspace', 'entertainment layout', 'split screen', 'quad'), invoke 'apply_workspace_layout(layout=...)'.
+- AUTONOMOUS FILE & DOWNLOADS CLEANER:
+  * When Sir asks to organize downloads or clean desktop, invoke 'organize_files(target_dir=..., ocr_rename_screenshots=True)'.
+- DEEP GIT & GITHUB DEVOPS (SHIP UPDATE):
+  * When Sir asks to 'ship update', 'commit and push', or deploy changes, invoke 'ship_git_update'. It inspects diffs, commits with conventional message, pushes, and creates PRs.
+- PERSISTENT CLIPBOARD CORTEX:
+  * To recall past copied snippets, code, or links, invoke 'search_clipboard_history(query=...)'.
+- OPTICAL INTRUDER SENTINEL:
+  * When Sir asks to arm sentry or watch for intruders, invoke 'toggle_intruder_sentinel(action="arm")'.
+- LIVE VOICE-TO-CODE STUDIO:
+  * When Sir describes a feature to build or code, invoke 'generate_code_studio(description=...)'.
+- AUTONOMOUS WEB PRICE TRACKER:
+  * To monitor prices of products on Amazon or Flipkart, invoke 'track_product_price(action="add", url=...)'.
 - VISUAL OCR & AUTONOMOUS UI ELEMENT CLICKING:
   * You are equipped with real-time neural OCR vision ('core/vision.py').
   * When Sir asks to click a button, link, tab, or UI element by name (e.g. 'click Compose', 'click Submit', 'click Search', 'click Workspace', 'click Antigravity'), invoke 'click_element(text_label=...)'.
@@ -481,12 +638,17 @@ def is_deterministic_fast_path(name: str, args: dict) -> bool:
         return True
     if name == "toggle_focus_mode":
         return True
-    if name in ["stop_mood_call", "trigger_comfort_protocol", "configure_hud_theme", "get_hud_theme"]:
+    if name in ["stop_mood_call", "trigger_comfort_protocol", "configure_hud_theme", "get_hud_theme", "set_chat_persona"]:
         return True
     return False
 
 def get_fast_ack_phrase(name: str, args: dict) -> str:
     """Return instant acknowledgment phrase from pre-warmed audio cache (0ms synthesis)."""
+    if name == "set_chat_persona":
+        p = (args.get("persona") or "radon").lower()
+        if p in ["radon", "me", "sir"]:
+            return "Radon mode online. I'm talking as you now."
+        return "Understood, Sir. Reverting to standard J.A.R.V.I.S. protocol."
     if name == "configure_hud_theme":
         return "HUD aesthetic theme recalibrated, Sir."
     if name == "stop_mood_call":
@@ -655,6 +817,46 @@ def extract_action_intent(text: str):
     if any(k in t for k in ["cloud mode", "switch to cloud", "go online", "online mode", "disable offline"]):
         return ("toggle_offline_mode", {"enabled": False})
 
+    # Instagram DM Automation fast-path intents
+    ig_enable_patterns = [
+        "start instagram automation", "enable instagram automation", "enable instagram dm",
+        "manage my instagram", "manage instagram dms", "auto reply instagram",
+        "instagram dm automation on", "turn on instagram automation", "instagram automation enable",
+        "start dm automation", "enable dm automation", "automate instagram dms", "automate my dms"
+    ]
+    if any(p in t for p in ig_enable_patterns):
+        return ("toggle_instagram_dm_automation", {"action": "enable"})
+
+    ig_disable_patterns = [
+        "stop instagram automation", "disable instagram automation", "disable instagram dm",
+        "stop managing my dms", "stop dm automation", "turn off instagram automation",
+        "instagram automation off", "instagram dm automation off", "stop auto reply instagram"
+    ]
+    if any(p in t for p in ig_disable_patterns):
+        return ("toggle_instagram_dm_automation", {"action": "disable"})
+
+    if any(p in t for p in ["instagram automation status", "dm automation status", "instagram dm status"]):
+        return ("toggle_instagram_dm_automation", {"action": "status"})
+
+    # Chat Persona fast-path intents (Radon impersonation vs standard JARVIS)
+    radon_persona_patterns = [
+        "talk like me", "pretend you are radon", "pretend to be radon", "act as radon", "act as me",
+        "take my persona", "take my persona for the chat", "be radon", "radon persona",
+        "speak as radon", "chat as radon", "chat like me", "pretend it is radon",
+        "talk like radon", "be radon on the chat", "talk as radon on the chat",
+        "chat on my behalf", "chat on my behalf as radon", "reply as me", "text as me"
+    ]
+    if any(p in t for p in radon_persona_patterns):
+        return ("set_chat_persona", {"persona": "radon"})
+
+    jarvis_persona_patterns = [
+        "switch back to jarvis", "be jarvis again", "talk like jarvis", "jarvis persona",
+        "be jarvis", "normal persona", "standard persona", "stop pretending", "back to jarvis",
+        "jarvis mode", "switch to jarvis"
+    ]
+    if any(p in t for p in jarvis_persona_patterns):
+        return ("set_chat_persona", {"persona": "jarvis"})
+
     # 0.005 Visual Element Clicking Intent
     click_patterns = [
         "click on ",
@@ -677,6 +879,123 @@ def extract_action_intent(text: str):
                 return ("click_element", {"text_label": target})
 
     # 0.01 Window Focus & Tab Switching
+    if any(k in t for k in ["close tab", "close the tab", "close this tab", "close active tab", "close browser tab", "close tabs"]) or re.search(r"close \d+ tabs?", t):
+        cnt_match = re.search(r"close (\d+) tabs?", t)
+        cnt = int(cnt_match.group(1)) if cnt_match else 1
+        return ("close_browser_tab", {"count": cnt})
+    if any(k in t for k in ["reopen tab", "restore tab", "undo close tab", "reopen closed tab"]):
+        return ("reopen_tab", {})
+
+    # Silent Mode / Pure Chat Toggle Intent
+    if any(k in t for k in ["silent mode on", "enable silent mode", "turn on silent mode", "silent mode", "mute voice", "voice off", "chat only", "no voice", "quiet mode", "be quiet"]):
+        return ("toggle_silent_mode", {"enabled": True})
+    if any(k in t for k in ["silent mode off", "disable silent mode", "turn off silent mode", "unmute voice", "voice on", "speak again", "sound on voice", "voice enable"]):
+        return ("toggle_silent_mode", {"enabled": False})
+
+    # 1. 🪟 Automated Workspace Layouts Intent
+    if any(k in t for k in ["setup my coding workspace", "setup coding workspace", "coding workspace", "coding layout", "code layout", "dev workspace"]):
+        return ("apply_workspace_layout", {"layout": "coding"})
+    if any(k in t for k in ["entertainment layout", "entertainment workspace", "setup entertainment layout", "setup entertainment workspace", "media layout"]):
+        return ("apply_workspace_layout", {"layout": "entertainment"})
+    if any(k in t for k in ["split layout", "split screen layout", "focus split layout", "focus split"]):
+        return ("apply_workspace_layout", {"layout": "split"})
+    if any(k in t for k in ["quad layout", "quadrant layout", "four corners layout"]):
+        return ("apply_workspace_layout", {"layout": "quad"})
+
+    # 2. 📂 Autonomous File & Downloads Auto-Organizer Intent
+    if any(k in t for k in ["organize downloads", "clean my downloads", "clean downloads", "sort downloads", "organize files", "clean files"]):
+        return ("organize_files", {"target_dir": "downloads", "ocr_rename_screenshots": True})
+    if any(k in t for k in ["organize desktop", "clean desktop", "clean my desktop", "sort desktop"]):
+        return ("organize_files", {"target_dir": "desktop", "ocr_rename_screenshots": True})
+
+    # 3. 🐙 Deep Git & GitHub Auto-DevOps Intent
+    if any(k in t for k in ["ship this update", "ship update", "git ship", "ship code", "ship project", "commit and push", "deploy this update"]):
+        return ("ship_git_update", {"create_pr": "pr" in t or "pull request" in t})
+
+    # 4. 📋 Persistent Semantic Clipboard Cortex Intent
+    if any(k in t for k in ["what was that link i copied", "what did i copy", "search clipboard", "clipboard history", "past clipboard", "find in clipboard"]):
+        q = t
+        for pfx in ["what was that link i copied", "what did i copy", "search clipboard for", "search clipboard", "find in clipboard", "clipboard"]:
+            if pfx in q:
+                q = q.replace(pfx, "").strip()
+        return ("search_clipboard_history", {"query": q or "recent", "action": "search"})
+
+    # 5. 👁️ Optical Intruder Sentinel Intent
+    if any(k in t for k in ["activate intruder sentinel", "arm intruder sentinel", "arm sentry", "intruder sentinel on", "enable intruder sentinel", "turn on intruder sentinel", "sentry on"]):
+        return ("toggle_intruder_sentinel", {"action": "arm"})
+    if any(k in t for k in ["disarm intruder sentinel", "disarm sentry", "intruder sentinel off", "turn off intruder sentinel", "disable intruder sentinel", "sentry off"]):
+        return ("toggle_intruder_sentinel", {"action": "disarm"})
+    if "intruder status" in t or "sentry status" in t:
+        return ("toggle_intruder_sentinel", {"action": "status"})
+
+    # 6. 💻 Live Voice-to-Code Studio Intent
+    code_match = re.search(r"(?:create|write|generate|build)\s+(?:a\s+)?(.+?)\s+(?:in|for|with)\s+(?:code|python|vscode)", t)
+    if code_match:
+        return ("generate_code_studio", {"description": code_match.group(1).strip()})
+    if any(k in t for k in ["voice to code", "code studio", "generate code for", "write code for"]):
+        desc = t
+        for pfx in ["voice to code", "code studio", "generate code for", "write code for"]:
+            if pfx in desc:
+                desc = desc.split(pfx, 1)[1]
+        return ("generate_code_studio", {"description": desc.strip()})
+
+    # 7. 🏷️ Autonomous Web Price & Deal Tracker Intent
+    if any(k in t for k in ["track price", "watch price", "price drop", "track product"]):
+        # Extract URL if present
+        url_match = re.search(r"https?://[^\s]+", t)
+        target_url = url_match.group(0) if url_match else ""
+        return ("track_product_price", {"action": "add" if target_url else "list", "url": target_url})
+
+    # Music & Media Hands-On Automation (YouTube, Spotify, Apple Music)
+    type_search_match = re.search(r"type\s+(.+?)\s+(?:on|in|into)\s+search\s+of\s+(spotify|apple music|youtube|code|vscode)", t)
+    if type_search_match:
+        query_text = type_search_match.group(1).strip()
+        app_target = type_search_match.group(2).strip()
+        return ("search_in_app", {"target": app_target, "query": query_text, "press_enter": True})
+
+    if "spotify" in t and any(w in t for w in ["play", "search", "put on", "listen to"]):
+        q = t
+        for pfx in ["play on spotify", "play", "search on spotify for", "search spotify for", "listen to", "put on"]:
+            if pfx in q:
+                q = q.split(pfx, 1)[1]
+                break
+        q = q.replace("on spotify", "").replace("in spotify", "").replace("and play it", "").strip()
+        if q:
+            return ("play_music", {"service": "spotify", "query": q, "action": "play"})
+
+    if "apple music" in t and any(w in t for w in ["play", "search", "put on", "listen to"]):
+        q = t
+        for pfx in ["play on apple music", "play", "search on apple music for", "search apple music for", "listen to", "put on"]:
+            if pfx in q:
+                q = q.split(pfx, 1)[1]
+                break
+        q = q.replace("on apple music", "").replace("in apple music", "").replace("and play it", "").strip()
+        if q:
+            return ("play_music", {"service": "apple_music", "query": q, "action": "play"})
+
+    # Ticket & Travel Booking Intent
+    if any(k in t for k in ["book ticket", "book tickets", "book flight", "book flights", "flight from", "book train", "train from", "book movie", "movie tickets"]):
+        cat = "flight" if any(w in t for w in ["flight", "plane", "airline"]) else ("train" if any(w in t for w in ["train", "rail", "irctc"]) else ("movie" if any(w in t for w in ["movie", "cinema", "theatre"]) else "general"))
+        orig, dest, dt = "", "", ""
+        from_to_match = re.search(r"from\s+([a-zA-Z\s]+?)\s+to\s+([a-zA-Z\s]+?)(?:\s+on\s+([a-zA-Z0-9\s]+))?$", t)
+        if from_to_match:
+            orig = from_to_match.group(1).strip()
+            dest = from_to_match.group(2).strip()
+            if from_to_match.group(3):
+                dt = from_to_match.group(3).strip()
+        return ("book_tickets", {"category": cat, "origin": orig, "destination": dest, "date": dt})
+
+    # VS Code & Antigravity Coding Hands
+    if "open vs code" in t or "open vscode" in t or "open visual studio code" in t:
+        return ("ide_code_control", {"action": "open_workspace"})
+    if any(k in t for k in ["prompt antigravity", "ask antigravity", "send prompt to antigravity", "give prompt to antigravity"]):
+        p_text = t
+        for pfx in ["prompt antigravity to", "prompt antigravity", "ask antigravity to", "ask antigravity", "send prompt to antigravity", "give prompt to antigravity"]:
+            if pfx in p_text:
+                p_text = p_text.split(pfx, 1)[1]
+                break
+        return ("prompt_antigravity", {"prompt": p_text.strip(), "mode": "auto"})
+
     if "switch to antigravity" in t or "focus antigravity" in t or "open antigravity" in t:
         return ("focus_application", {"target": "Antigravity"})
     if "switch to brave" in t or "focus brave" in t or "back to brave" in t or "back to jarvis" in t or "switch to jarvis" in t:
@@ -853,6 +1172,8 @@ class JarvisSession:
         self.manual_offline_mode = False
         self.in_failover = False
         self.last_camera_frame = None
+        self.chat_persona = "jarvis"  # "jarvis" | "radon"
+        self.silent_mode = False  # True for quiet chat-only (no audio output)
 
     async def send(self, **msg):
         try:
@@ -869,6 +1190,9 @@ class JarvisSession:
             save_chat_message("jarvis", text)
         except Exception as e:
             print(f"Chat persistence error: {e}")
+        # Skip TTS voice synthesis if silent mode is enabled
+        if getattr(self, "silent_mode", False):
+            return
         # Synthesize audio in parallel and stream neural voice playback
         try:
             audio_b64 = await get_or_synthesize_audio(text)
@@ -878,6 +1202,8 @@ class JarvisSession:
             print(f"TTS synthesis error: {e}")
 
     async def synthesize_and_stream_chunk(self, msg_id: str, chunk_index: int, text: str):
+        if getattr(self, "silent_mode", False):
+            return
         try:
             audio_b64 = await get_or_synthesize_audio(text)
             if audio_b64:
@@ -1269,6 +1595,106 @@ class JarvisSession:
             await self.send(type="log", text=msg)
             return msg
 
+        if name == "close_browser_tab":
+            cnt = int(args.get("count", 1))
+            res = await asyncio.to_thread(close_active_tab, cnt)
+            await self.send(type="log", text=f"Closed {res.get('closed_tabs', 1)} active tab(s).")
+            return f"Closed {res.get('closed_tabs', 1)} active tab(s), Sir."
+
+        if name == "navigate_tab":
+            target = args.get("url_or_query", "").strip()
+            res = await asyncio.to_thread(navigate_current_tab, target)
+            await self.send(type="log", text=f"Navigated active tab to: {res.get('navigated_to')}")
+            return f"Active tab navigated to {res.get('navigated_to')}, Sir."
+
+        if name == "reopen_tab":
+            res = await asyncio.to_thread(reopen_closed_tab)
+            await self.send(type="log", text="Reopened recently closed browser tab.")
+            return "Reopened recently closed browser tab, Sir."
+
+        if name == "play_music":
+            srv = args.get("service", "youtube")
+            q = args.get("query", "")
+            act = args.get("action", "play")
+            res = await asyncio.to_thread(hands_play_music, service=srv, query=q, action=act)
+            if res.get("url"):
+                await self.send(type="open_tab", url=res["url"])
+            await self.send(type="log", text=f"Music Automation: {res.get('message')}")
+            return res.get("message", f"Playing {q} on {srv}.")
+
+        if name == "search_in_app":
+            target = args.get("target", "spotify")
+            q = args.get("query", "")
+            enter = args.get("press_enter", True)
+            res = await asyncio.to_thread(type_search_in_app, target, q, enter)
+            await self.send(type="log", text=res.get("message", f"Typed '{q}' into {target}"))
+            return res.get("message", f"Search completed in {target}.")
+
+        if name == "book_tickets":
+            cat = args.get("category", "flight")
+            orig = args.get("origin", "")
+            dest = args.get("destination", "")
+            dt = args.get("date", "")
+            prov = args.get("provider", "auto")
+            pax = int(args.get("passengers", 1))
+            ret_dt = args.get("return_date", "")
+            notes = args.get("additional_notes", "")
+            res = await asyncio.to_thread(
+                book_tickets_portal,
+                category=cat,
+                origin=orig,
+                destination=dest,
+                date=dt,
+                provider=prov,
+                passengers=pax,
+                return_date=ret_dt,
+                additional_notes=notes
+            )
+            if res.get("url"):
+                await self.send(type="open_tab", url=res["url"])
+            await self.send(type="log", text=f"Ticket Portal: {res.get('provider')} ({orig} -> {dest})")
+            return res.get("message")
+
+        if name == "ide_code_control":
+            act = args.get("action", "open_workspace")
+            target = args.get("target", "vscode")
+            p = args.get("path", "")
+            content = args.get("content", "")
+            cmd = args.get("terminal_command", "")
+            
+            if act == "open_workspace":
+                res = await asyncio.to_thread(open_in_vscode, p)
+                await self.send(type="log", text=res.get("message", f"Opened {p} in {target}"))
+                return res.get("message", f"Opened in {target}.")
+            elif act == "write_code_file":
+                res = await asyncio.to_thread(write_code_file_and_open, p, content, True)
+                await self.send(type="log", text=res.get("message", f"Wrote code to {p}"))
+                return res.get("message", f"Wrote code to {p}.")
+            elif act in ["run_terminal", "terminal"]:
+                res = await asyncio.to_thread(send_keys_to_vscode, "terminal", cmd)
+                await self.send(type="log", text=f"Executed terminal command in VS Code: {cmd}")
+                return f"Dispatched '{cmd}' to VS Code terminal, Sir."
+            elif act == "send_keys":
+                k_act = args.get("key_action", "terminal")
+                res = await asyncio.to_thread(send_keys_to_vscode, k_act, cmd)
+                return f"Executed '{k_act}' in VS Code, Sir."
+            return f"IDE control action '{act}' completed."
+
+        if name == "prompt_antigravity":
+            prompt = args.get("prompt", "")
+            mode = args.get("mode", "auto")
+            ret_hud = args.get("return_to_hud", True)
+            
+            if mode == "cli":
+                res = await asyncio.to_thread(run_antigravity_cli_prompt, prompt)
+                await self.send(type="log", text=f"Antigravity CLI: {res.get('message')}")
+                return f"Antigravity CLI Result: {res.get('output', res.get('message'))}"
+            else:
+                from core.window_manager import dispatch_prompt_to_antigravity
+                res = await asyncio.to_thread(dispatch_prompt_to_antigravity, prompt, ret_hud)
+                await self.send(type="log", text=f"Antigravity Prompt Dispatch: {res}")
+                return res
+
         if name == "type_into_app":
             from core.window_manager import type_into_app
             target = args["target"].strip()
@@ -1329,6 +1755,93 @@ class JarvisSession:
             await self.send(type="core_mode", mode="offline" if enabled else "cloud", label=label)
             await self.send(type="log", text=f"Switched neural mode: {label}")
             return f"Switched neural core to {'Local Offline Mode (Ollama)' if enabled else 'Cloud Mode (Gemini)'}, Sir."
+
+        if name == "toggle_silent_mode":
+            enabled = bool(args.get("enabled", True))
+            self.silent_mode = enabled
+            await self.send(type="silent_mode_update", enabled=enabled)
+            status_text = "engaged (quiet text-only chat, voice muted)" if enabled else "disengaged (voice synthesis active)"
+            await self.send(type="log", text=f"🔇 Silent Mode {status_text}.")
+            return f"Silent mode {status_text}, Sir."
+
+        if name == "apply_workspace_layout":
+            ly = args.get("layout", "coding")
+            res = await asyncio.to_thread(apply_workspace_layout, ly)
+            await self.send(type="log", text=f"🪟 Workspace Layout: {res.get('message')}")
+            return res.get("message", f"Applied {ly} layout.")
+
+        if name == "organize_files":
+            tdir = args.get("target_dir", "downloads")
+            ocr_opt = bool(args.get("ocr_rename_screenshots", True))
+            res = await asyncio.to_thread(organize_directory, target_dir=tdir, ocr_rename_screenshots=ocr_opt)
+            await self.send(type="log", text=f"📂 File Organizer: {res.get('message')}")
+            return res.get("message", f"Organized {tdir}.")
+
+        if name == "ship_git_update":
+            c_msg = args.get("commit_message", "")
+            br = args.get("branch")
+            pr = bool(args.get("create_pr", False))
+            res = await asyncio.to_thread(ship_git_update, commit_message=c_msg, branch=br, create_pr=pr)
+            await self.send(type="log", text=f"🐙 Git DevOps: {res.get('message')}")
+            return res.get("message", "Git update complete.")
+
+        if name == "search_clipboard_history":
+            act = args.get("action", "search")
+            q = args.get("query", "")
+            if act == "restore":
+                iid = args.get("item_id")
+                res = await asyncio.to_thread(restore_clipboard_item, item_id=iid, keyword=q)
+                return res.get("message", "Clipboard restored.")
+            else:
+                items = await asyncio.to_thread(query_clipboard_cortex, q, 6)
+                if not items:
+                    return f"No matching snippets found for '{q}' in clipboard cortex."
+                lines = [f"- [{i['timestamp'][11:16]} | {i['type'].upper()}]: {i['summary']}" for i in items]
+                return f"Clipboard History Cortex for '{q}':\n" + "\n".join(lines)
+
+        if name == "toggle_intruder_sentinel":
+            act = args.get("action", "arm").lower()
+            sentinel = get_intruder_sentinel()
+            if act == "arm":
+                res = sentinel.arm()
+                await self.send(type="log", text="👁️ Optical Intruder Sentinel ARMED")
+                return res["message"]
+            elif act == "disarm":
+                res = sentinel.disarm()
+                await self.send(type="log", text="👁️ Optical Intruder Sentinel DISARMED")
+                return res["message"]
+            else:
+                st = sentinel.get_status()
+                return f"Intruder Sentinel: {'ARMED' if st['armed'] else 'DISARMED'}. Total breaches captured: {st['total_detections']}."
+
+        if name == "generate_code_studio":
+            desc = args.get("description", "")
+            tfile = args.get("target_file", "")
+            rtests = bool(args.get("run_tests", True))
+            res = await generate_and_inject_code(desc, target_file=tfile, run_tests=rtests)
+            await self.send(type="log", text=f"💻 Voice-to-Code: {res.get('message')}")
+            return res.get("message", f"Generated code for {desc}.")
+
+        if name == "track_product_price":
+            act = args.get("action", "list")
+            url = args.get("url", "")
+            tp = args.get("target_price")
+            if act == "add" and url:
+                res = await asyncio.to_thread(add_tracked_product, url, tp)
+                await self.send(type="log", text=f"🏷️ Price Tracker: {res.get('message')}")
+                return res.get("message")
+            elif act == "check_now":
+                drops = await asyncio.to_thread(check_all_prices)
+                if drops:
+                    lines = [f"- **{d['title']}**: Dropped to {d['currency']} {d['new_price']}" for d in drops]
+                    return "Price drops detected, Sir:\n" + "\n".join(lines)
+                return "Price check complete. No new price drops detected."
+            else:
+                items = await asyncio.to_thread(list_tracked_products)
+                if not items:
+                    return "No products actively tracked yet. Provide an Amazon or Flipkart URL to begin."
+                lines = [f"- **{i['title'][:35]}**: Current: {i['currency']} {i['current_price']} (Target: {i['target_price'] or 'None'})" for i in items]
+                return "Actively Tracked Products:\n" + "\n".join(lines)
 
         if name == "open_browser_tab":
             url = args.get("url", "").strip()
@@ -1406,6 +1919,64 @@ class JarvisSession:
                 target=args.get("target", ""),
                 message=args.get("message", "")
             )
+
+        if name == "toggle_instagram_dm_automation":
+            dm_auto = get_dm_automator()
+            act = (args.get("action") or "status").lower().strip()
+            if act == "enable":
+                interval = args.get("poll_interval")
+                dm_auto.enable(poll_interval=interval)
+                return (
+                    "Instagram DM Automation ENGAGED, Sir. "
+                    "Connecting to Instagram's real-time MQTT push stream — "
+                    "replies will fire within seconds of receiving a message. "
+                    "If MQTT is unavailable, fast polling (20 s) activates automatically."
+                )
+            elif act == "disable":
+                dm_auto.disable()
+                st = dm_auto.get_status()
+                return (
+                    f"Instagram DM Automation DISENGAGED, Sir. "
+                    f"Your inbox will no longer be managed autonomously. "
+                    f"Total replies dispatched this session: {st['total_replied']}."
+                )
+            else:  # status
+                st = dm_auto.get_status()
+                state = "ACTIVE" if st["enabled"] else "STANDBY"
+                last_scan = st["last_scan"] or "No scan yet"
+                recent = "\n".join(st["last_replies"]) if st["last_replies"] else "None"
+                mode = st.get("mode", "unknown").upper()
+                mqtt = "✅ CONNECTED" if st.get("mqtt_active") else "❌ Not active"
+                return (
+                    f"Instagram DM Automation: {state} ({mode} mode)\n"
+                    f"MQTT Real-Time Stream: {mqtt}\n"
+                    f"Last Activity: {last_scan}\n"
+                    f"Total Replies Sent: {st['total_replied']}\n"
+                    f"Recent Replies:\n{recent}"
+                )
+
+        if name == "set_chat_persona":
+            target_persona = (args.get("persona") or "radon").lower().strip()
+            if target_persona in ["radon", "me", "sir"]:
+                self.chat_persona = "radon"
+                set_persona_mode("radon")
+                try:
+                    get_voice_biometrics().set_active_profile("sir_clone")
+                except Exception:
+                    pass
+                await self.send(type="log", text="🎭 Persona switched: RADON (@redonxd) — First-Person Human Mode")
+                await self.send(type="chat_persona_update", persona="radon")
+                return "Yo, Radon persona active. Talking as you from now on."
+            else:
+                self.chat_persona = "jarvis"
+                set_persona_mode("jarvis")
+                try:
+                    get_voice_biometrics().set_active_profile("jarvis_prime")
+                except Exception:
+                    pass
+                await self.send(type="log", text="🎭 Persona switched: J.A.R.V.I.S. — Standard British AI Protocol")
+                await self.send(type="chat_persona_update", persona="jarvis")
+                return "Standard J.A.R.V.I.S. persona re-engaged, Sir. Standing by."
 
         if name == "system_control":
             act = args.get("action", "lock")
@@ -1813,7 +2384,7 @@ class JarvisSession:
         try:
             for _ in range(15):
                 await self.send(type="state", s="thinking")
-                msgs = [{"role": "system", "content": system_prompt(query=user_text)}] + prune_history(self.history)
+                msgs = [{"role": "system", "content": system_prompt(query=user_text, persona=self.chat_persona)}] + prune_history(self.history)
                 
                 choice = None
                 engine_name = "Gemini Cloud"
@@ -2138,6 +2709,44 @@ async def websocket_handler(ws: WebSocket):
                 await session.send(type="core_mode", mode="offline" if session.manual_offline_mode else "cloud", label=label)
                 await session.send(type="log", text=f"Neural Engine Mode: {'OFFLINE (LOCAL OLLAMA)' if session.manual_offline_mode else 'ONLINE (GEMINI CLOUD)'}")
 
+            elif msg_type == "toggle_instagram_dm_automation":
+                dm_auto = get_dm_automator()
+                action = data.get("action", "enable")
+                interval = data.get("poll_interval")
+                if action == "enable":
+                    dm_auto.enable(interval=interval)
+                    st = dm_auto.get_status()
+                    await session.send(type="log", text=f"📲 Instagram DM Automation ENGAGED — scanning every {st['poll_interval_seconds']}s, Sir.")
+                elif action == "disable":
+                    dm_auto.disable()
+                    st = dm_auto.get_status()
+                    await session.send(type="log", text=f"📲 Instagram DM Automation DISENGAGED. Total replies this session: {st['total_replied']}.")
+                else:
+                    st = dm_auto.get_status()
+                    state = "ACTIVE" if st["enabled"] else "STANDBY"
+                    await session.send(type="log", text=f"📲 Instagram DM Automation: {state} | Last scan: {st['last_scan'] or 'N/A'} | Replies: {st['total_replied']}")
+
+            elif msg_type == "set_chat_persona":
+                p = (data.get("persona") or "radon").lower().strip()
+                if p in ["radon", "me", "sir"]:
+                    session.chat_persona = "radon"
+                    set_persona_mode("radon")
+                    try:
+                        get_voice_biometrics().set_active_profile("sir_clone")
+                    except Exception:
+                        pass
+                    await session.send(type="chat_persona_update", persona="radon")
+                    await session.send(type="log", text="🎭 Persona switched: RADON (@redonxd) — First-Person Impersonation")
+                else:
+                    session.chat_persona = "jarvis"
+                    set_persona_mode("jarvis")
+                    try:
+                        get_voice_biometrics().set_active_profile("jarvis_prime")
+                    except Exception:
+                        pass
+                    await session.send(type="chat_persona_update", persona="jarvis")
+                    await session.send(type="log", text="🎭 Persona switched: J.A.R.V.I.S. — Standard British AI Protocol")
+
             elif msg_type == "ping":
                 await session.send(type="pong", t=time.time())
 
@@ -2289,6 +2898,12 @@ async def websocket_handler(ws: WebSocket):
                 theme_data = get_hud_theme_manager().cycle_next_theme()
                 await session.send(type="hud_theme_update", **theme_data)
 
+            elif msg_type == "set_silent_mode":
+                session.silent_mode = bool(data.get("enabled", False))
+                status = "ENGAGED (Text-Only / Audio Muted)" if session.silent_mode else "DISENGAGED (Voice Active)"
+                await session.send(type="silent_mode_update", enabled=session.silent_mode)
+                await session.send(type="log", text=f"🔇 Silent Mode {status}, Sir.")
+
             elif msg_type == "approve":
                 aid = data.get("id")
                 if aid in session.pending:
@@ -2341,5 +2956,9 @@ async def websocket_handler(ws: WebSocket):
         telemetry_task.cancel()
 
 if __name__ == "__main__":
-    print(f"[*] J.A.R.V.I.S. Core initializing on http://127.0.0.1:{PORT}", flush=True)
+    print("=" * 65, flush=True)
+    print(f"[*] 🚀 J.A.R.V.I.S. HUD is live!", flush=True)
+    print(f"[*] 👉 Open in your browser: http://localhost:{PORT} or http://127.0.0.1:{PORT}", flush=True)
+    print(f"[*] (Note: Windows browsers cannot open 0.0.0.0; use localhost:{PORT})", flush=True)
+    print("=" * 65, flush=True)
     uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="info")

@@ -1725,6 +1725,11 @@ body {
       </div>
 
       <div class="toggle-row">
+        <label for="silent-mode-toggle" style="color: var(--amber); font-weight: 600;" title="Mutes all vocal audio for stealth text-only chatting">🔇 Silent Mode (Chat Only)</label>
+        <input type="checkbox" id="silent-mode-toggle">
+      </div>
+
+      <div class="toggle-row">
         <label for="tts-toggle">Neural Vocal Speech (TTS)</label>
         <input type="checkbox" id="tts-toggle" checked>
       </div>
@@ -1747,6 +1752,16 @@ body {
       <div class="toggle-row">
         <label for="offline-toggle" style="color: var(--amber); font-weight: 600;">Offline Local Failover (Ollama)</label>
         <input type="checkbox" id="offline-toggle">
+      </div>
+
+      <div class="toggle-row">
+        <label for="ig-dm-auto-toggle" style="color: #e040fb; font-weight: 600;" title="When enabled, J.A.R.V.I.S. autonomously scans your Instagram inbox every 90 seconds and replies to all DMs on your behalf using Gemini AI.">📲 Instagram DM Automation</label>
+        <input type="checkbox" id="ig-dm-auto-toggle">
+      </div>
+
+      <div class="toggle-row">
+        <label for="persona-radon-toggle" id="persona-label" style="color: #00f0ff; font-weight: 600;" title="Toggle between J.A.R.V.I.S. British AI and Radon's first-person human persona">🎭 Persona: J.A.R.V.I.S.</label>
+        <input type="checkbox" id="persona-radon-toggle">
       </div>
 
       <div class="toggle-row" style="font-size: 11px;">
@@ -1804,6 +1819,7 @@ body {
       <button class="stark-btn mini" onclick="openVoiceStudioDrawer()" title="Biometric Voice Clone & Vocal Studio">🎙️ VOICE</button>
       <button class="stark-btn mini" onclick="openArDrawer()" title="Holographic 2.5D AR Window Radar Matrix">🪟 AR WINDOWS</button>
       <button class="stark-btn mini" onclick="promptSwarmDispatch()" title="Autonomous Multi-Agent Swarm Orchestrator">🚀 SWARM</button>
+      <button class="stark-btn mini" id="silent-mode-btn" onclick="toggleSilentMode()" title="Toggle Silent Mode: Pure quiet text chat with no voice output">🔇 SILENT: OFF</button>
       <button class="stark-btn mini" id="sfx-toggle-btn" onclick="toggleSFX()" title="Synthesized Cybernetic Sound FX">🔊 SFX: ON</button>
       <button class="stark-btn mini" id="pip-btn" onclick="toggleFloatingBubble()" title="Pop-out Attentive Corner Bubble">🔮 BUBBLE</button>
       <button class="stark-btn mini" onclick="clearChatLog()" title="Clear Chat Stream">🧹 CLEAR</button>
@@ -2536,6 +2552,39 @@ function getTTSAnalyser() {
   return ttsAnalyser;
 }
 
+let isSilentMode = localStorage.getItem('jarvis_silent_mode') === 'true';
+
+function toggleSilentMode(forceVal) {
+  isSilentMode = forceVal !== undefined ? forceVal : !isSilentMode;
+  try { localStorage.setItem('jarvis_silent_mode', isSilentMode); } catch (e) {}
+  
+  const btn = $('#silent-mode-btn');
+  const toggle = $('#silent-mode-toggle');
+  if (toggle) toggle.checked = isSilentMode;
+  
+  if (isSilentMode) {
+    if (btn) {
+      btn.innerHTML = '🔇 SILENT: ON';
+      btn.style.borderColor = 'var(--amber)';
+      btn.style.color = 'var(--amber)';
+      btn.style.background = 'rgba(255, 170, 0, 0.15)';
+    }
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    if (typeof ttsAudio !== 'undefined' && ttsAudio) { ttsAudio.pause(); ttsAudio.currentTime = 0; }
+    if (typeof audioStreamQueue !== 'undefined') audioStreamQueue.reset();
+    appendDiagLog('🔇 Silent Mode Engaged: Voice synthesis muted. Pure text chat active.');
+  } else {
+    if (btn) {
+      btn.innerHTML = '🔇 SILENT: OFF';
+      btn.style.borderColor = '';
+      btn.style.color = '';
+      btn.style.background = '';
+    }
+    appendDiagLog('🔊 Voice Synthesis Re-enabled: Vocal speech active.');
+  }
+  sendWS({ type: 'set_silent_mode', enabled: isSilentMode });
+}
+
 let sfxEnabled = true;
 function toggleSFX() {
   sfxEnabled = !sfxEnabled;
@@ -2852,6 +2901,14 @@ $('#audio-device-select').onchange = async e => {
   }
 };
 
+// Silent Mode Toggle Handler
+if ($('#silent-mode-toggle')) {
+  $('#silent-mode-toggle').onchange = e => toggleSilentMode(e.target.checked);
+}
+if (isSilentMode) {
+  setTimeout(() => toggleSilentMode(true), 250);
+}
+
 // Autonomy Toggle Handler
 $('#autonomy-toggle').onchange = e => {
   const isFull = e.target.checked;
@@ -2888,6 +2945,40 @@ $('#offline-toggle').onchange = e => {
     $('#status-badge').style.color = 'var(--cyan)';
     appendDiagLog("Neural Engine: Switched to Online Cloud Mode (Gemini).");
   }
+  playSound('click');
+};
+
+// Instagram DM Automation toggle
+$('#ig-dm-auto-toggle').onchange = e => {
+  const enabled = e.target.checked;
+  const action = enabled ? 'enable' : 'disable';
+  sendWS({
+    type: 'chat',
+    text: `Toggle instagram DM automation: ${action}`,
+    _tool_hint: 'toggle_instagram_dm_automation',
+    _tool_args: { action }
+  });
+  if (enabled) {
+    appendDiagLog("📲 Instagram DM Automation: ENGAGED — J.A.R.V.I.S. will now manage all DM conversations autonomously.");
+    document.getElementById('ig-dm-auto-toggle').parentElement.querySelector('label').style.color = '#00e676';
+  } else {
+    appendDiagLog("📲 Instagram DM Automation: DISENGAGED — autonomous DM management paused.");
+    document.getElementById('ig-dm-auto-toggle').parentElement.querySelector('label').style.color = '#e040fb';
+  }
+  playSound('click');
+};
+
+// Chat Persona toggle (Radon vs JARVIS)
+$('#persona-radon-toggle').onchange = e => {
+  const isRadon = e.target.checked;
+  const persona = isRadon ? 'radon' : 'jarvis';
+  sendWS({ type: 'set_chat_persona', persona });
+  const label = $('#persona-label');
+  if (label) {
+    label.textContent = isRadon ? '🎭 Persona: Radon (@redonxd)' : '🎭 Persona: J.A.R.V.I.S.';
+    label.style.color = isRadon ? '#ff9100' : '#00f0ff';
+  }
+  appendDiagLog(`🎭 Chat Persona switched: ${isRadon ? 'RADON (@redonxd) - First-Person Mode' : 'J.A.R.V.I.S. - Standard AI'}`);
   playSound('click');
 };
 
@@ -3596,7 +3687,7 @@ function appendStreamChat(role, textChunk, msgId, chunkIndex) {
 }
 
 function speakInstantNative(text) {
-  if (!window.speechSynthesis) return false;
+  if (isSilentMode || !window.speechSynthesis) return false;
   window.speechSynthesis.cancel();
   const utter = new SpeechSynthesisUtterance(text);
   utter.rate = 1.06;
@@ -3645,7 +3736,7 @@ class AudioStreamQueue {
   }
 
   enqueue(chunkIndex, b64Audio, msgId) {
-    if (!$('#tts-toggle').checked) return;
+    if (isSilentMode || !$('#tts-toggle').checked) return;
     if (this.activeMsgId && this.activeMsgId !== msgId) {
       this.reset();
     }
@@ -3713,7 +3804,7 @@ function appendDiagLog(text) {
 }
 
 function playNeuralAudio(b64Audio) {
-  if (!$('#tts-toggle').checked) return;
+  if (isSilentMode || !$('#tts-toggle').checked) return;
   try {
     getTTSAnalyser();
     ttsAudio.pause();
@@ -4222,28 +4313,34 @@ function handleWSMessage(e) {
   if (msg.type === 'say') {
     appendChat('jarvis', msg.text, msg.id);
     appendSuggestionChips();
-    if ($('#native-voice-toggle')?.checked) {
-      speakInstantNative(msg.text);
-    } else if (msg.audio) {
-      playNeuralAudio(msg.audio);
+    if (!isSilentMode) {
+      if ($('#native-voice-toggle')?.checked) {
+        speakInstantNative(msg.text);
+      } else if (msg.audio) {
+        playNeuralAudio(msg.audio);
+      }
     }
   } else if (msg.type === 'say_text') {
     appendChat('jarvis', msg.text, msg.id);
-    if ($('#native-voice-toggle')?.checked) {
+    if (!isSilentMode && $('#native-voice-toggle')?.checked) {
       speakInstantNative(msg.text);
     }
   } else if (msg.type === 'say_audio') {
-    if (!$('#native-voice-toggle')?.checked && msg.audio) {
+    if (!isSilentMode && !$('#native-voice-toggle')?.checked && msg.audio) {
       playNeuralAudio(msg.audio);
     }
   } else if (msg.type === 'say_stream_text') {
     appendStreamChat('jarvis', msg.text, msg.id, msg.chunk_index);
-    if ($('#native-voice-toggle')?.checked) {
+    if (!isSilentMode && $('#native-voice-toggle')?.checked) {
       speakInstantNative(msg.text);
     }
   } else if (msg.type === 'say_stream_audio') {
-    if (!$('#native-voice-toggle')?.checked && msg.audio) {
+    if (!isSilentMode && !$('#native-voice-toggle')?.checked && msg.audio) {
       audioStreamQueue.enqueue(msg.chunk_index, msg.audio, msg.id);
+    }
+  } else if (msg.type === 'silent_mode_update') {
+    if (isSilentMode !== msg.enabled) {
+      toggleSilentMode(msg.enabled);
     }
   } else if (msg.type === 'say_stream_end') {
     appendSuggestionChips();
@@ -4351,6 +4448,15 @@ function handleWSMessage(e) {
     if (toggle) toggle.checked = isOffline;
     $('#status-badge').textContent = msg.label || (isOffline ? 'NEURAL CORE // OFFLINE LOCAL MODE' : 'SYSTEM NOMINAL // STANDBY');
     $('#status-badge').style.color = isOffline ? 'var(--amber)' : 'var(--cyan)';
+  } else if (msg.type === 'chat_persona_update') {
+    const isRadon = (msg.persona === 'radon');
+    const toggle = $('#persona-radon-toggle');
+    const label = $('#persona-label');
+    if (toggle) toggle.checked = isRadon;
+    if (label) {
+      label.textContent = isRadon ? '🎭 Persona: Radon (@redonxd)' : '🎭 Persona: J.A.R.V.I.S.';
+      label.style.color = isRadon ? '#ff9100' : '#00f0ff';
+    }
   } else if (msg.type === 'chat_history') {
     if (msg.messages && msg.messages.length > 0) {
       restoreChatHistory(msg.messages);

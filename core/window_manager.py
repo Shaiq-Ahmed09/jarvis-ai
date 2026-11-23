@@ -181,26 +181,33 @@ def type_into_app(target: str, text: str, press_enter: bool = True) -> dict:
     return {"success": True, "app": res["process"], "title": res["title"], "typed": text[:60]}
 
 def dispatch_prompt_to_antigravity(prompt: str, return_to_brave: bool = True) -> str:
-    """Dispatch an autonomous improvement prompt directly into Antigravity and optionally return to Brave."""
+    """Dispatch an autonomous improvement prompt directly into Antigravity (GUI or CLI) and optionally return to Brave."""
     # 1. Copy prompt to clipboard
     pyperclip.copy(prompt)
     
-    # 2. Focus Antigravity IDE
+    # 2. Focus Antigravity IDE (or Code with Antigravity chat panel)
     res = focus_app("Antigravity")
     if not res.get("success"):
-        return f"Could not focus Antigravity: {res.get('error')}"
+        res = focus_app("Code")
         
-    time.sleep(0.5)
-    
-    # 3. Paste the prompt into Antigravity's active chat input and press Enter
-    pyautogui.hotkey("ctrl", "v")
-    time.sleep(0.15)
-    pyautogui.press("enter")
-    
-    # 4. If requested, return focus back to Brave / J.A.R.V.I.S. HUD after short delay
-    if return_to_brave:
-        time.sleep(1.2)
-        focus_app("Brave")
-        return f"Prompt successfully submitted into Antigravity ('{prompt[:50]}...'). Re-focused Brave HUD to monitor progress."
+    if res.get("success"):
+        time.sleep(0.5)
+        # 3. Paste the prompt into Antigravity's active chat input and press Enter
+        pyautogui.hotkey("ctrl", "v")
+        time.sleep(0.15)
+        pyautogui.press("enter")
         
-    return f"Prompt submitted into Antigravity. Focused on Antigravity."
+        # 4. If requested, return focus back to Brave / J.A.R.V.I.S. HUD after short delay
+        if return_to_brave:
+            time.sleep(1.2)
+            focus_app("Brave")
+            return f"Prompt successfully submitted into Antigravity ('{prompt[:50]}...'). Re-focused Brave HUD to monitor progress."
+        return f"Prompt submitted into Antigravity ({res['process']}). Focused on workspace."
+        
+    # Fallback to agy CLI if GUI is not directly matchable
+    try:
+        from core.system_hands import run_antigravity_cli_prompt
+        cli_res = run_antigravity_cli_prompt(prompt)
+        return f"Dispatched prompt directly to Antigravity CLI: {cli_res.get('message', 'Completed')}"
+    except Exception as e:
+        return f"Could not dispatch to Antigravity: {e}"

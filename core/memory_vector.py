@@ -9,6 +9,8 @@ import json
 import os
 from pathlib import Path
 import re
+import threading
+import time
 from typing import Dict, List, Optional, Tuple, Any
 
 import chromadb
@@ -21,6 +23,7 @@ MEMORY_JSON = HERE / "memory.json"
 # Singleton ChromaDB client & collection
 _chroma_client = None
 _cortex_collection = None
+_cortex_lock = threading.Lock()
 
 def _generate_384d_embedding(text: str) -> List[float]:
     """Generate deterministic, high-dimensional (384-d) normalized vector embedding.
@@ -75,19 +78,44 @@ def _generate_384d_embedding(text: str) -> List[float]:
     return vec.tolist()
 
 def get_cortex_collection():
-    """Lazily initialize persistent ChromaDB cortex collection."""
+    """Thread-safe lazy initialization of persistent ChromaDB cortex collection."""
     global _chroma_client, _cortex_collection
-    if _cortex_collection is None:
+    if _cortex_collection is not None:
+        return _cortex_collection
+
+    with _cortex_lock:
+        if _cortex_collection is not None:
+            return _cortex_collection
+
         CORTEX_DIR.mkdir(parents=True, exist_ok=True)
-        _chroma_client = chromadb.PersistentClient(path=str(CORTEX_DIR))
-        _cortex_collection = _chroma_client.get_or_create_collection(
-            name="jarvis_memory_cortex",
-            embedding_function=None,
-            metadata={"hnsw:space": "cosine"}
-        )
-        # Migrate initial legacy memories from memory.json if collection is empty
-        _sync_initial_legacy_memories()
-    return _cortex_collection
+        for attempt in range(3):
+            try:
+                _chroma_client = chromadb.PersistentClient(path=str(CORTEX_DIR))
+                _cortex_collection = _chroma_client.get_or_create_collection(
+                    name="jarvis_memory_cortex",
+                    embedding_function=None,
+                    metadata={"hnsw:space": "cosine"}
+                )
+                _sync_initial_legacy_memories()
+                return _cortex_collection
+            except Exception as e:
+                print(f"ChromaDB initialization attempt {attempt + 1} warning: {e}")
+                time.sleep(0.3)
+
+        # Fallback to in-memory Client if disk tenant is temporarily locked
+        try:
+            print("ChromaDB falling back to EphemeralClient for session safety...")
+            _chroma_client = chromadb.EphemeralClient()
+            _cortex_collection = _chroma_client.get_or_create_collection(
+                name="jarvis_memory_cortex",
+                embedding_function=None,
+                metadata={"hnsw:space": "cosine"}
+            )
+            _sync_initial_legacy_memories()
+            return _cortex_collection
+        except Exception as ex:
+            print(f"EphemeralClient fallback error: {ex}")
+            raise
 
 def _sync_initial_legacy_memories():
     """Populate vector cortex from memory.json if starting fresh."""
