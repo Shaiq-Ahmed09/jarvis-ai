@@ -25,6 +25,7 @@ import sys
 import os
 import math
 import json
+import uuid
 import ctypes
 from pathlib import Path
 from dotenv import load_dotenv
@@ -51,6 +52,7 @@ from PySide6.QtWebChannel import QWebChannel
 from jarvis_client import JarvisClient
 from wake_word import WakeWordWorker
 from screen_capture import capture_screen_base64, send_to_vision_api
+from hud_widgets import TwoBubbleHUD
 
 # Windows Default Desktop Attach for reliable monitor mapping
 try:
@@ -539,12 +541,15 @@ class DesktopAIBubble(QWidget):
         # Determine target web URL: prioritize argument, then environment, default to 8765
         self.backend_url = backend_url or os.getenv("JARVIS_WEB_URL", "http://localhost:8765")
         self.is_expanded = False
-        self.popup_mode = "full"  # "full" (420x640) or "compact" (320x110)
+        self.popup_mode = "hud"   # always "hud" now — Two-Bubble HUD
         self.state = "idle"  # "idle", "listening", "thinking", "speaking"
         self._is_dragging = False
         self._drag_start = QPoint()
         self._start_pos = QPoint()
         self._dock_side = "right"  # "left" or "right"
+
+        # Persistent session ID for backend memory sync
+        self.session_id = str(uuid.uuid4())
 
         # Animation state variables
         self._breath_phase = 0.0      # 3.5s sinusoidal breathing cycle
@@ -576,8 +581,17 @@ class DesktopAIBubble(QWidget):
         self.wake_worker.wake_detected.connect(self._on_wake_word_triggered)
         self.wake_worker.start()
 
-        # Build UI layout (Glassmorphic card container with embedded QWebEngineView)
+        # Build UI layout: now ONLY the 96x96 frameless orb (no card, no web view)
         self._build_ui()
+
+        # Two-Bubble HUD overlay (sibling window, created after orb is built)
+        self.hud = TwoBubbleHUD(
+            orb_widget=self,
+            backend_url=self.backend_url,
+            session_id=self.session_id,
+        )
+        self.hud.dismissed.connect(self._on_hud_dismissed)
+        self.hud.state_changed.connect(self.set_state)
 
         # Expansion/Collapse Geometry Animation (220ms, QEasingCurve.OutExpo)
         self.geom_anim = QPropertyAnimation(self, b"geometry")
@@ -678,142 +692,12 @@ class DesktopAIBubble(QWidget):
     # UI Construction (Embedded QWebEngineView + Top Drag Bar)
     # -------------------------------------------------------------------------
     def _build_ui(self):
-        """Constructs the dark glassmorphic popup container with QWebEngineView & QWebChannel."""
+        """The orb is fully self-contained as a 96x96 frameless transparent QPainter widget.
+        No card, no web view — the Two-Bubble HUD is a separate sibling overlay window."""
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.main_layout.setSpacing(0)
-
-        # Outer Glassmorphic Card Container (420x640px)
-        self.card = QFrame(self)
-        self.card.setObjectName("webCard")
-        self.card.setStyleSheet("""
-            #webCard {
-                background: rgba(10, 16, 28, 238);
-                border: 1px solid rgba(0, 240, 255, 0.45);
-                border-radius: 16px;
-            }
-        """)
-
-        card_layout = QVBoxLayout(self.card)
-        card_layout.setContentsMargins(0, 0, 0, 0)
-        card_layout.setSpacing(0)
-
-        # 1. Top Drag Bar
-        self.top_drag_bar = TopDragBar(self)
-        top_layout = QHBoxLayout(self.top_drag_bar)
-        top_layout.setContentsMargins(10, 4, 10, 4)
-        top_layout.setSpacing(8)
-
-        # Live Mini-Orb
-        self.mini_orb = MiniOrbWidget(self)
-        top_layout.addWidget(self.mini_orb)
-
-        # Title Label
-        title_lbl = QLabel("J.A.R.V.I.S.")
-        title_lbl.setFont(QFont("Segoe UI", 9, QFont.Bold))
-        title_lbl.setStyleSheet("color: #00f0ff; letter-spacing: 1.2px; margin-left: 2px;")
-        top_layout.addWidget(title_lbl)
-
-        # Connection Status Pill
-        self.status_pill = QLabel("● ONLINE")
-        self.status_pill.setFont(QFont("Consolas", 8, QFont.Bold))
-        self.status_pill.setStyleSheet("""
-            QLabel {
-                color: #10b981;
-                background: rgba(16, 185, 129, 0.12);
-                border: 1px solid rgba(16, 185, 129, 0.3);
-                border-radius: 10px;
-                padding: 2px 8px;
-            }
-        """)
-        top_layout.addWidget(self.status_pill)
-        top_layout.addStretch()
-
-        # Action Buttons: Compact HUD Toggle, Reload, Open in Browser, Minimize
-        self.btn_compact = QPushButton("🎙️")
-        self.btn_compact.setObjectName("btnHeaderAction")
-        self.btn_compact.setToolTip("Switch to Compact Voice HUD Mode (320x110)")
-        self.btn_compact.setFixedSize(26, 26)
-        self.btn_compact.setCursor(Qt.PointingHandCursor)
-        self.btn_compact.clicked.connect(self.toggle_popup_mode)
-
-        self.btn_reload = QPushButton("🔄")
-        self.btn_reload.setObjectName("btnHeaderAction")
-        self.btn_reload.setToolTip("Reload Web Interface")
-        self.btn_reload.setFixedSize(26, 26)
-        self.btn_reload.setCursor(Qt.PointingHandCursor)
-        self.btn_reload.clicked.connect(self._reload_web_view)
-
-        self.btn_hud = QPushButton("🌐")
-        self.btn_hud.setObjectName("btnHeaderAction")
-        self.btn_hud.setToolTip("Open in External Browser")
-        self.btn_hud.setFixedSize(26, 26)
-        self.btn_hud.setCursor(Qt.PointingHandCursor)
-        self.btn_hud.clicked.connect(self._open_web_hud)
-
-        self.btn_min = QPushButton("—")
-        self.btn_min.setObjectName("btnHeaderAction")
-        self.btn_min.setToolTip("Minimize to Desktop Bubble (Esc)")
-        self.btn_min.setFixedSize(26, 26)
-        self.btn_min.setCursor(Qt.PointingHandCursor)
-        self.btn_min.clicked.connect(self.collapse_bubble)
-
-        self.top_drag_bar.setStyleSheet(self.top_drag_bar.styleSheet() + """
-            QPushButton#btnHeaderAction {
-                background: rgba(15, 23, 42, 0.7);
-                border: 1px solid rgba(0, 240, 255, 0.25);
-                border-radius: 13px;
-                color: #00f0ff;
-                font-size: 11px;
-                font-weight: bold;
-            }
-            QPushButton#btnHeaderAction:hover {
-                background: rgba(0, 240, 255, 0.25);
-                border-color: #00f0ff;
-            }
-        """)
-
-        top_layout.addWidget(self.btn_compact)
-        top_layout.addWidget(self.btn_reload)
-        top_layout.addWidget(self.btn_hud)
-        top_layout.addWidget(self.btn_min)
-        card_layout.addWidget(self.top_drag_bar)
-
-        # 2. Compact Voice HUD Widget (320x110 Pill)
-        self.compact_hud_widget = CompactHudWidget(self)
-        self.compact_hud_widget.hide()
-        card_layout.addWidget(self.compact_hud_widget)
-
-        # 3. Embedded QWebEngineView with QWebChannel Bridge
-        self.web_view = QWebEngineView(self.card)
-        self.web_page = JarvisWebEnginePage(self.web_view)
-        self.web_page.setBackgroundColor(Qt.transparent)
-        self.web_view.setPage(self.web_page)
-        self.web_view.setAttribute(Qt.WA_TranslucentBackground, True)
-        self.web_view.setStyleSheet("background: transparent;")
-
-        # Set up QWebChannel to expose Python JarvisBridge to JavaScript
-        self.channel = QWebChannel(self.web_page)
-        self.bridge = JarvisBridge(self)
-        self.bridge.orbStateChanged.connect(self.set_state)
-        self.bridge.audioLevelChanged.connect(self.set_audio_level)
-        self.bridge.minimizeRequested.connect(self.collapse_bubble)
-        self.bridge.transcriptUpdated.connect(self.set_transcript)
-        if hasattr(self, "wake_worker"):
-            self.bridge.micDeviceChanged.connect(self.wake_worker.set_microphone)
-        self.channel.registerObject("jarvisDesktop", self.bridge)
-        self.web_page.setWebChannel(self.channel)
-
-        # Initial web page load
-        target_url = self.backend_url
-        if not target_url.startswith("http"):
-            target_url = f"http://{target_url}"
-        self.web_view.load(QUrl(target_url))
-
-        card_layout.addWidget(self.web_view, 1)
-
-        self.main_layout.addWidget(self.card)
-        self.card.hide()  # Collapsed initially
+        # (Orb painting is entirely in paintEvent; nothing to add here)
 
     def _update_mask(self):
         """Enforces a pure circular window mask when collapsed, and clears it when expanded."""
@@ -874,17 +758,18 @@ class DesktopAIBubble(QWidget):
         if not self.is_expanded:
             self.update()
         else:
-            if hasattr(self, "mini_orb") and getattr(self, "popup_mode", "full") == "full":
-                self.mini_orb.update()
             if hasattr(self, "compact_hud_widget") and self.compact_hud_widget.isVisible():
                 self.compact_hud_widget.orb.update()
+        # Always update HUD orb if visible
+        if hasattr(self, "hud") and self.hud.isVisible():
+            self.hud.input_pill.update()
+            self.hud.response_bubble.update()
 
     # -------------------------------------------------------------------------
     # Multi-Layer QPainter Sci-Fi HUD Orb (96x96 Canvas, 60x60 Core)
     # -------------------------------------------------------------------------
     def paintEvent(self, event):
-        if self.is_expanded:
-            return  # QSS + DWM Blur handles expanded card layout
+        # Orb always paints; the HUD overlay is a sibling window, not painted here
 
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
@@ -1144,178 +1029,72 @@ class DesktopAIBubble(QWidget):
         self.snap_anim.start()
 
     # -------------------------------------------------------------------------
-    # Expand / Collapse Mechanics & Mode Switching (Full vs Compact HUD)
+    # Expand / Collapse Mechanics — now delegates to Two-Bubble HUD
     # -------------------------------------------------------------------------
     def toggle_expand(self):
+        """Toggle orb click: open HUD if closed, close if already open."""
         if self.is_expanded:
             self.collapse_bubble()
         else:
             self.expand_popup()
 
     def toggle_popup_mode(self):
-        """Switches between Full Web App Mode (420x640) and Compact Mini-HUD Mode (320x110)."""
-        new_mode = "compact" if self.popup_mode == "full" else "full"
-        self.set_popup_mode(new_mode)
+        """No-op in HUD mode (retained for compatibility)."""
+        pass
 
     def set_popup_mode(self, mode: str):
-        """Sets the popup mode ('full' or 'compact') with smooth geometric transition."""
-        if mode not in ("full", "compact"):
-            return
-        self.popup_mode = mode
-        if not self.is_expanded:
-            return
-
-        cur_x, cur_y = self.x(), self.y()
-        cur_w, cur_h = self.width(), self.height()
-        screen = QApplication.primaryScreen().availableGeometry()
-
-        if self.popup_mode == "compact":
-            target_w, target_h = 320, 110
-            self.top_drag_bar.hide()
-            self.web_view.hide()
-            self.compact_hud_widget.show()
-        else:
-            target_w, target_h = 420, 640
-            self.compact_hud_widget.hide()
-            self.top_drag_bar.show()
-            self.web_view.show()
-
-        if self._dock_side == "left":
-            target_x = cur_x
-        else:
-            target_x = cur_x + cur_w - target_w
-        target_y = cur_y + cur_h - target_h
-
-        target_x = max(screen.left() + 12, min(target_x, screen.right() - target_w - 12))
-        target_y = max(screen.top() + 12, min(target_y, screen.bottom() - target_h - 12))
-
-        self.geom_anim.stop()
-        self.geom_anim.setDuration(200)
-        self.geom_anim.setEasingCurve(QEasingCurve.OutExpo)
-        self.geom_anim.setStartValue(self.geometry())
-        self.geom_anim.setEndValue(QRect(target_x, target_y, target_w, target_h))
-        self.geom_anim.start()
+        """No-op in HUD mode (retained for compatibility)."""
+        pass
 
     def expand_popup(self):
-        """Smoothly expands to full (420x640) or compact (320x110) mode, anchored from bubble corner with Windows 11 DWM blur."""
+        """Slide the Two-Bubble HUD in beside the orb."""
         if self.is_expanded:
-            self.activateWindow()
-            self._dispatch_hotkey_activation()
+            if hasattr(self, "hud"):
+                self.hud.input_pill.input.setFocus()
             return
-
         self.is_expanded = True
-        cur_x, cur_y = self.x(), self.y()
-        cur_w, cur_h = self.width(), self.height()
-
-        if self.popup_mode == "compact":
-            target_w, target_h = 320, 110
-            self.top_drag_bar.hide()
-            self.web_view.hide()
-            self.compact_hud_widget.show()
-        else:
-            target_w, target_h = 420, 640
-            self.compact_hud_widget.hide()
-            self.top_drag_bar.show()
-            self.web_view.show()
-
-        screen = QApplication.primaryScreen().availableGeometry()
-
-        # Anchor corner based on screen dock side
-        if self._dock_side == "left":
-            target_x = cur_x
-        else:
-            target_x = cur_x + cur_w - target_w
-        target_y = cur_y + cur_h - target_h
-
-        # Boundary clamping
-        target_x = max(screen.left() + 12, min(target_x, screen.right() - target_w - 12))
-        target_y = max(screen.top() + 12, min(target_y, screen.bottom() - target_h - 12))
-
-        self.geom_anim.stop()
-        self.geom_anim.setDuration(220)
-        self.geom_anim.setEasingCurve(QEasingCurve.OutExpo)
-        self.geom_anim.setStartValue(self.geometry())
-        self.geom_anim.setEndValue(QRect(target_x, target_y, target_w, target_h))
-        self.geom_anim.start()
-
-        # Clear mask for expanded card layout and engage Windows 11 DWM Blur & Acrylic
-        self.clearMask()
-        try:
-            enable_windows_translucency(int(self.winId()))
-        except Exception:
-            pass
-
-        self.card.show()
-        self.activateWindow()
-        self._dispatch_hotkey_activation()
+        self._update_mask()   # keep orb circular
+        if hasattr(self, "hud"):
+            self.hud.update_position()
+            self.hud.expand()
 
     def collapse_bubble(self):
-        """Smoothly collapses back to the 96x96 floating HUD orb."""
+        """Collapse the Two-Bubble HUD and restore the orb."""
         if not self.is_expanded:
             return
-
         self.is_expanded = False
-        self.card.hide()
-        if hasattr(self, "compact_hud_widget"):
-            self.compact_hud_widget.hide()
-
-        # Disable Acrylic/BlurBehind immediately so no square backdrop remains on screen
-        try:
-            disable_windows_translucency(int(self.winId()))
-        except Exception:
-            pass
+        self.set_state("idle")
+        if hasattr(self, "hud"):
+            self.hud.collapse()
         self._update_mask()
+        self.update()
 
-        cur_x, cur_y = self.x(), self.y()
-        cur_w, cur_h = self.width(), self.height()
-
-        target_w, target_h = 96, 96
-        if self._dock_side == "left":
-            target_x = cur_x
-        else:
-            target_x = cur_x + cur_w - target_w
-        target_y = cur_y + cur_h - target_h
-
-        self.geom_anim.stop()
-        self.geom_anim.setDuration(220)
-        self.geom_anim.setEasingCurve(QEasingCurve.OutExpo)
-        self.geom_anim.setStartValue(self.geometry())
-        self.geom_anim.setEndValue(QRect(target_x, target_y, target_w, target_h))
-        self.geom_anim.start()
+    def _on_hud_dismissed(self):
+        """Called when HUD collapses itself (Esc/dismiss)."""
+        self.is_expanded = False
+        self.set_state("idle")
+        self._update_mask()
+        self.update()
 
     def _on_anim_finished(self):
-        if self.is_expanded:
-            self.clearMask()
-            self.card.show()
-            if self.popup_mode == "compact":
-                self.top_drag_bar.hide()
-                self.web_view.hide()
-                self.compact_hud_widget.show()
-            else:
-                self.compact_hud_widget.hide()
-                self.top_drag_bar.show()
-                self.web_view.show()
-            self._dispatch_hotkey_activation()
-        else:
-            self.card.hide()
-            if hasattr(self, "compact_hud_widget"):
-                self.compact_hud_widget.hide()
-            self._update_mask()
-            self.update()
+        """Animation finished callback (orb geometry anim — no-op in HUD mode)."""
+        self._update_mask()
+        self.update()
 
     def set_transcript(self, text: str, speaker: str = "jarvis"):
-        """Updates real-time voice transcript in Compact HUD."""
-        if hasattr(self, "compact_hud_widget"):
-            self.compact_hud_widget.set_transcript(text, speaker)
+        """Updates transcript (no-op in HUD mode; kept for bridge compatibility)."""
+        pass
 
     def stop_directive(self):
-        """Cancels TTS playback and stops active directive execution."""
-        if hasattr(self, "web_view") and self.web_view.page():
-            self.web_view.page().runJavaScript(
-                'window.dispatchEvent(new CustomEvent("jarvis-stop"));'
-            )
+        """Cancels any pending HUD response request."""
+        if hasattr(self, "hud") and self.hud._worker and self.hud._worker.isRunning():
+            self.hud._worker.quit()
         self.set_state("idle")
-        self.set_transcript("Directive stopped, Sir.", "jarvis")
+
+    def _dispatch_hotkey_activation(self):
+        """Focus input pill when hotkey fires."""
+        if hasattr(self, "hud") and self.hud.isVisible():
+            self.hud.input_pill.input.setFocus()
 
     def _dispatch_hotkey_activation(self):
         """Dispatches custom event 'jarvis-hotkey-activate' into the embedded web application."""
@@ -1332,28 +1111,7 @@ class DesktopAIBubble(QWidget):
         super().keyPressEvent(event)
 
     def _on_status_changed(self, online: bool):
-        if online:
-            self.status_pill.setText("● ONLINE")
-            self.status_pill.setStyleSheet("""
-                QLabel {
-                    color: #10b981;
-                    background: rgba(16, 185, 129, 0.12);
-                    border: 1px solid rgba(16, 185, 129, 0.3);
-                    border-radius: 10px;
-                    padding: 2px 8px;
-                }
-            """)
-        else:
-            self.status_pill.setText("● OFFLINE")
-            self.status_pill.setStyleSheet("""
-                QLabel {
-                    color: #ef4444;
-                    background: rgba(239, 68, 68, 0.12);
-                    border: 1px solid rgba(239, 68, 68, 0.3);
-                    border-radius: 10px;
-                    padding: 2px 8px;
-                }
-            """)
+        pass   # No status pill in HUD-only mode; kept for JarvisClient signal
 
     def _on_wake_audio_level(self, level: float):
         """Streams live mic RMS level to orb so the floating bubble pulses with voice."""
@@ -1362,18 +1120,15 @@ class DesktopAIBubble(QWidget):
 
     def _on_wake_word_triggered(self, phrase: str):
         """Triggered when background wake-word engine detects 'Hey Jarvis'."""
-        print(f"[DesktopAIBubble] Wake word '{phrase}' detected! Expanding popup & listening...")
+        print(f"[DesktopAIBubble] Wake word '{phrase}' detected! Expanding HUD & listening...")
         self.expand_popup()
         self.set_state("listening")
-        if hasattr(self, "bridge"):
-            self.bridge.wakeTriggered.emit(phrase)
-        if hasattr(self, "web_view") and self.web_view.page():
-            self.web_view.page().runJavaScript(
-                f'window.dispatchEvent(new CustomEvent("jarvis-wake-activate", {{ detail: {{ phrase: "{phrase}" }} }}));'
-            )
+        # Pre-fill HUD input with wake-word suggestion
+        if hasattr(self, "hud") and self.hud.isVisible():
+            self.hud.pre_fill("")   # Clear and focus for voice input
 
     def handle_clipboard_action(self, text: str):
-        """Pre-loads Windows clipboard text into Jarvis with quick-action chips and expands popup."""
+        """Pre-loads Windows clipboard text into the HUD Input Pill and expands."""
         if not text or not text.strip():
             print("[DesktopAIBubble] Clipboard is empty or contains whitespace.")
             return
@@ -1384,19 +1139,15 @@ class DesktopAIBubble(QWidget):
             self.expand_popup()
         self.activateWindow()
 
-        # Emit over bridge
-        if hasattr(self, "bridge"):
-            self.bridge.clipboardActivated.emit(text)
-
-        # Dispatch DOM event directly into WebEngine page
-        if hasattr(self, "web_view") and self.web_view.page():
-            escaped = json.dumps(text)
-            self.web_view.page().runJavaScript(
-                f'window.dispatchEvent(new CustomEvent("jarvis-clipboard-activate", {{ detail: {{ text: {escaped} }} }}));'
-            )
+        # Pre-fill HUD input with clipboard text
+        if hasattr(self, "hud"):
+            self.hud.pre_fill(text)
 
     def closeEvent(self, event):
         if hasattr(self, "wake_worker"):
             self.wake_worker.stop()
+        if hasattr(self, "hud"):
+            self.hud.hide()
+            self.hud.deleteLater()
         self.client.shutdown()
         super().closeEvent(event)

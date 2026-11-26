@@ -116,6 +116,17 @@ def main():
 
     tray_menu.addSeparator()
 
+    act_open_app = tray_menu.addAction("🌐  Open Full Jarvis Web App")
+    def open_full_web_app():
+        import webbrowser
+        url = bubble.backend_url.rstrip("/")
+        if not url.startswith("http"):
+            url = f"http://{url}"
+        session = getattr(bubble, "session_id", "")
+        full_url = f"{url}?session_id={session}" if session else url
+        webbrowser.open(full_url)
+    act_open_app.triggered.connect(open_full_web_app)
+
     act_quit = tray_menu.addAction("✕   Quit J.A.R.V.I.S.")
     act_quit.triggered.connect(app.quit)
 

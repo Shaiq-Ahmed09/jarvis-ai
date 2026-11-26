@@ -2833,6 +2833,7 @@ from pydantic import BaseModel
 class ChatMessageRequest(BaseModel):
     message: str
     image: Optional[str] = None
+    session_id: Optional[str] = "default"
 
 class VisionAnalysisRequest(BaseModel):
     query: Optional[str] = "Describe what is visible on Sir's screen and what you observe."
@@ -2840,10 +2841,14 @@ class VisionAnalysisRequest(BaseModel):
 
 @app.post("/chat")
 async def api_post_chat(req: ChatMessageRequest):
-    """Direct POST /chat endpoint for Desktop AI Bubble and multimodal interactions."""
+    """Direct POST /chat endpoint for Desktop AI Bubble and multimodal interactions.
+    Accepts an optional session_id so the floating HUD bubble persists its conversation
+    in the shared backend memory/database, visible in the full web app via GET /api/chat/history.
+    """
     user_text = req.message.strip()
+    session_id = (req.session_id or "default").strip() or "default"
     if not user_text and not req.image:
-        return {"response": "I am standing by, Sir."}
+        return {"response": "I am standing by, Sir.", "session_id": session_id}
     try:
         prompt_str = system_prompt(user_text)
         contents = [prompt_str, f"User: {user_text or 'Inspect this attached screen image.'}"]
@@ -2859,13 +2864,33 @@ async def api_post_chat(req: ChatMessageRequest):
         )
         reply = resp.text.strip() if resp and resp.text else "Command acknowledged, Sir."
         try:
-            save_chat_message("user", user_text)
-            save_chat_message("assistant", reply)
+            save_chat_message("user", user_text, session_id=session_id)
+            save_chat_message("assistant", reply, session_id=session_id)
         except Exception:
-            pass
-        return {"response": reply}
+            try:
+                save_chat_message("user", user_text)
+                save_chat_message("assistant", reply)
+            except Exception:
+                pass
+        return {"response": reply, "session_id": session_id}
     except Exception as e:
-        return {"response": f"J.A.R.V.I.S.: Acknowledged '{user_text}'. (Core status: {e})"}
+        return {"response": f"J.A.R.V.I.S.: Acknowledged '{user_text}'. (Core status: {e})", "session_id": session_id}
+
+@app.get("/api/chat/history")
+async def api_get_chat_history(session_id: Optional[str] = None, limit: int = 60):
+    """
+    Returns the shared conversation history from the backend memory/database.
+    The floating desktop Two-Bubble HUD posts to /chat with a session_id; this
+    endpoint exposes those messages to the full Jarvis web app.
+    Query params:
+      session_id  — filter by session (omit for all recent messages)
+      limit       — max messages to return (default 60)
+    """
+    try:
+        messages = get_recent_chat_history(limit=limit, session_id=session_id)
+        return {"messages": messages, "count": len(messages), "session_id": session_id or "all"}
+    except Exception as e:
+        return {"messages": [], "count": 0, "error": str(e)}
 
 @app.post("/api/vision")
 async def api_post_vision(req: VisionAnalysisRequest):
