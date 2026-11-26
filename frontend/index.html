@@ -7,6 +7,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@500;700;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <!-- Qt WebChannel Two-Way Desktop Bridge -->
+  <script src="/qwebchannel.js"></script>
 
   <style>
     :root {
@@ -1061,6 +1063,41 @@
         </div>
       </div>
 
+      <!-- Audio & Microphone Hardware Configuration -->
+      <div class="drawer-section" id="section-audio-mic">
+        <div class="section-title">
+          <span>🎤 AUDIO & MICROPHONE</span>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px; line-height: 1.4;">
+          Select primary input hardware for neural speech transcription. Real-time hot-plug detection is active.
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">
+          <label for="mic-select" style="font-size: 11px; color: var(--cyan); font-family: var(--font-code);">Input Device</label>
+          <div style="display: flex; gap: 8px;">
+            <select id="mic-select" style="flex: 1; background: #030712; color: #f8fafc; border: 1px solid var(--glass-border); padding: 8px 12px; border-radius: 8px; font-size: 12px; outline: none; font-family: var(--font-main);">
+              <option value="">Default Microphone</option>
+            </select>
+            <button class="action-pill-btn" id="btn-refresh-mics" title="Rescan Input Devices" style="padding: 6px 12px; font-size: 12px;">🔄</button>
+          </div>
+        </div>
+
+        <!-- Live Mic Input Level Test Bar -->
+        <div style="padding: 12px; background: rgba(3, 8, 18, 0.75); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="font-size: 11px; font-family: var(--font-code); color: var(--text-muted);">LIVE INPUT LEVEL</span>
+            <span id="mic-level-text" style="font-size: 11px; font-family: var(--font-code); color: var(--cyan);">0%</span>
+          </div>
+          <div style="width: 100%; height: 8px; background: rgba(255, 255, 255, 0.08); border-radius: 4px; overflow: hidden; position: relative;">
+            <div id="mic-level-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #00f0ff, #10b981); transition: width 0.06s ease; border-radius: 4px;"></div>
+          </div>
+          <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
+            <button class="action-pill-btn" id="btn-test-mic" style="padding: 6px 14px; font-size: 11px; border-color: var(--cyan); color: var(--cyan);">
+              <span>🎙️</span> Test Microphone
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Live Telemetry -->
       <div class="drawer-section">
         <div class="section-title">
@@ -1205,13 +1242,27 @@
     const WINDOW_OFFSET_X = 450;
     const WINDOW_OFFSET_Y = 40;
 
-    // Connect to WebSocket
+    // API Base & Dynamic Reconnection
+    const API_BASE = window.JARVIS_API_BASE || window.location.origin;
+    let wsReconnectAttempts = 0;
+    let wsReconnectTimer = null;
+
+    // Connect to WebSocket with dynamic base URL & exponential auto-reconnection
     function connectWS() {
+      if (wsReconnectTimer) {
+        clearTimeout(wsReconnectTimer);
+        wsReconnectTimer = null;
+      }
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const url = `${proto}//${location.host}/ws`;
+      let host = location.host;
+      if (window.JARVIS_API_BASE) {
+        try { host = new URL(window.JARVIS_API_BASE).host; } catch(e){}
+      }
+      const url = `${proto}//${host}/ws`;
       ws = new WebSocket(url);
 
       ws.onopen = () => {
+        wsReconnectAttempts = 0;
         $('#conn-dot').classList.remove('offline');
         $('#conn-label').textContent = 'STARK CORE // ONLINE';
         addDrawerLog('WebSocket connection established.');
@@ -1220,9 +1271,15 @@
 
       ws.onclose = () => {
         $('#conn-dot').classList.add('offline');
-        $('#conn-label').textContent = 'STARK CORE // DISCONNECTED';
-        addDrawerLog('WebSocket disconnected. Retrying in 3s...');
-        setTimeout(connectWS, 3000);
+        $('#conn-label').textContent = 'STARK CORE // RECONNECTING...';
+        wsReconnectAttempts++;
+        const delay = Math.min(5000, 1000 * Math.pow(1.5, wsReconnectAttempts));
+        addDrawerLog(`WebSocket disconnected. Auto-reconnecting in ${(delay/1000).toFixed(1)}s (Attempt #${wsReconnectAttempts})...`);
+        wsReconnectTimer = setTimeout(connectWS, delay);
+      };
+
+      ws.onerror = err => {
+        console.warn("WebSocket status warning:", err);
       };
 
       ws.onmessage = handleWSMessage;
@@ -1278,11 +1335,18 @@
       }
     }
 
-    // Set Bubble State Animation
+    // Set Bubble State Animation & Sync with Desktop Shell
+    window.currentOrbState = 'idle';
+
     function setOrbState(s) {
+      window.currentOrbState = s;
+      if (window.jarvisDesktop && typeof window.jarvisDesktop.setOrbState === 'function') {
+        try { window.jarvisDesktop.setOrbState(s); } catch (e) {}
+      }
+
       const orb = $('#ai-bubble');
       const badge = $('#bubble-status');
-      orb.classList.remove('listening', 'thinking', 'speaking');
+      if (orb) orb.classList.remove('listening', 'thinking', 'speaking');
 
       if (s === 'listening') {
         orb.classList.add('listening');
@@ -1627,9 +1691,44 @@
     async function startAudioRecording() {
       if (isRecording) return;
       try {
-        if (!audioStream) {
+        const selectedId = localStorage.getItem('jarvis_selected_mic_id');
+        const constraints = {
+          audio: selectedId ? { deviceId: { exact: selectedId } } : true
+        };
+
+        try {
+          audioStream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (deviceErr) {
+          console.warn("Selected microphone failed, falling back to system default:", deviceErr);
           audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         }
+
+        // Live Audio Analyser to modulate desktop orb in real time while speaking
+        try {
+          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          const source = audioContext.createMediaStreamSource(audioStream);
+          const analyser = audioContext.createAnalyser();
+          analyser.fftSize = 256;
+          source.connect(analyser);
+          const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+          function monitorSpeechLevel() {
+            if (!isRecording) return;
+            analyser.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+            const avg = sum / dataArray.length;
+            const norm = Math.min(1.0, avg / 128);
+            if (window.jarvisDesktop && typeof window.jarvisDesktop.setAudioLevel === 'function') {
+              try { window.jarvisDesktop.setAudioLevel(norm); } catch (e) {}
+            }
+            requestAnimationFrame(monitorSpeechLevel);
+          }
+          monitorSpeechLevel();
+        } catch (ctxErr) {
+          console.warn("AudioContext monitoring unavailable:", ctxErr);
+        }
+
         audioChunks = [];
         const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/ogg';
         mediaRecorder = new MediaRecorder(audioStream, { mimeType: mime });
@@ -1651,6 +1750,13 @@
           isRecording = false;
           $('#btn-mic').classList.remove('recording');
           setOrbState('thinking');
+          if (audioContext) {
+            audioContext.close().catch(() => {});
+            audioContext = null;
+          }
+          if (window.jarvisDesktop && typeof window.jarvisDesktop.setAudioLevel === 'function') {
+            try { window.jarvisDesktop.setAudioLevel(0.0); } catch (e) {}
+          }
         };
 
         mediaRecorder.start();
@@ -1716,6 +1822,10 @@
 
     // Desktop Floating Bubble Launcher & Minimize Trigger
     window.triggerDesktopBubble = function(minimizeBrowser = true) {
+      if (window.jarvisDesktop && typeof window.jarvisDesktop.minimizeToBubble === 'function') {
+        window.jarvisDesktop.minimizeToBubble();
+        return;
+      }
       const b = document.getElementById('btn-min-to-desktop');
       if (b && minimizeBrowser) {
         b.innerHTML = '<span>🔮</span> Minimizing to Desktop...';
@@ -1746,20 +1856,216 @@
       $('#btn-launch-desktop-bubble').onclick = () => window.triggerDesktopBubble(true);
     }
 
-    // Auto-summon Desktop Bubble whenever the web app is minimized or hidden
+    // Auto-summon Desktop Bubble whenever the web app is minimized or hidden (browser only)
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
+      if (document.hidden && !window.jarvisDesktop) {
         window.triggerDesktopBubble(false);
       }
     });
 
     window.addEventListener('blur', () => {
-      window.triggerDesktopBubble(false);
+      if (!window.jarvisDesktop) {
+        window.triggerDesktopBubble(false);
+      }
     });
 
-    // Auto-launch Desktop Sentinel Overlay on initial web app load
+    // =========================================================================
+    // AUDIO & MICROPHONE HARDWARE MANAGER (SETTINGS)
+    // =========================================================================
+    let selectedMicId = localStorage.getItem('jarvis_selected_mic_id') || '';
+    let micTestStream = null;
+    let micTestContext = null;
+    let micTestAnimId = null;
+    let isTestingMic = false;
+
+    async function populateMicDevices(requestPermission = false) {
+      const select = $('#mic-select');
+      if (!select) return;
+
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+          addDrawerLog('Audio device enumeration not supported in this browser.');
+          return;
+        }
+
+        // Request initial permission probe if labels are missing
+        if (requestPermission) {
+          try {
+            const probeStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            probeStream.getTracks().forEach(t => t.stop());
+          } catch (e) {
+            console.warn('Microphone permission probe error:', e);
+          }
+        }
+
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioInputs = devices.filter(d => d.kind === 'audioinput');
+
+        select.innerHTML = '<option value="">Default Microphone</option>';
+        audioInputs.forEach((dev, index) => {
+          const opt = document.createElement('option');
+          opt.value = dev.deviceId;
+          opt.textContent = dev.label || `Microphone ${index + 1} (${dev.deviceId.slice(0, 8)}...)`;
+          if (dev.deviceId === selectedMicId) {
+            opt.selected = true;
+          }
+          select.appendChild(opt);
+        });
+
+        addDrawerLog(`Audio devices scanned: ${audioInputs.length} input(s) available.`);
+      } catch (err) {
+        console.error('Error enumerating audio inputs:', err);
+        addDrawerLog(`Audio Scan Error: ${err.message}`);
+      }
+    }
+
+    // Live Hot-Plug Detection: update dropdown when mic/headset is connected/disconnected
+    if (navigator.mediaDevices && navigator.mediaDevices.ondevicechange !== undefined) {
+      navigator.mediaDevices.ondevicechange = () => {
+        addDrawerLog('Audio hardware change detected. Updating microphone list...');
+        populateMicDevices(false);
+      };
+    }
+
+    if ($('#mic-select')) {
+      $('#mic-select').onchange = e => {
+        selectedMicId = e.target.value;
+        localStorage.setItem('jarvis_selected_mic_id', selectedMicId);
+        addDrawerLog(`Microphone configured: ${selectedMicId ? 'Specific Device' : 'System Default'}`);
+        if (isTestingMic) {
+          stopMicTest();
+          startMicTest();
+        }
+      };
+    }
+
+    if ($('#btn-refresh-mics')) {
+      $('#btn-refresh-mics').onclick = () => populateMicDevices(true);
+    }
+
+    // Live Mic Input Level Test
+    async function startMicTest() {
+      try {
+        const constraints = {
+          audio: selectedMicId ? { deviceId: { exact: selectedMicId } } : true
+        };
+        try {
+          micTestStream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (err) {
+          micTestStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        }
+
+        micTestContext = new (window.AudioContext || window.webkitAudioContext)();
+        const source = micTestContext.createMediaStreamSource(micTestStream);
+        const analyser = micTestContext.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        isTestingMic = true;
+        const btn = $('#btn-test-mic');
+        if (btn) {
+          btn.innerHTML = '<span>⏹️</span> Stop Test';
+          btn.style.borderColor = 'var(--crimson)';
+          btn.style.color = 'var(--crimson)';
+        }
+
+        function renderLevel() {
+          if (!isTestingMic) return;
+          analyser.getByteFrequencyData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) {
+            sum += dataArray[i];
+          }
+          const avg = sum / dataArray.length;
+          const pct = Math.min(100, Math.round((avg / 128) * 100));
+
+          const bar = $('#mic-level-bar');
+          const txt = $('#mic-level-text');
+          if (bar) bar.style.width = `${pct}%`;
+          if (txt) txt.textContent = `${pct}%`;
+
+          // Forward normalized audio level to PySide6 Desktop Orb for real-time pulsing!
+          const normLevel = Math.min(1.0, avg / 128);
+          if (window.jarvisDesktop && typeof window.jarvisDesktop.setAudioLevel === 'function') {
+            try { window.jarvisDesktop.setAudioLevel(normLevel); } catch (e) {}
+          }
+
+          micTestAnimId = requestAnimationFrame(renderLevel);
+        }
+        renderLevel();
+      } catch (err) {
+        console.error('Mic test error:', err);
+        addDrawerLog(`Mic Test Error: ${err.message}`);
+        stopMicTest();
+      }
+    }
+
+    function stopMicTest() {
+      isTestingMic = false;
+      if (micTestAnimId) cancelAnimationFrame(micTestAnimId);
+      if (micTestStream) {
+        micTestStream.getTracks().forEach(t => t.stop());
+        micTestStream = null;
+      }
+      if (micTestContext) {
+        micTestContext.close().catch(() => {});
+        micTestContext = null;
+      }
+      const bar = $('#mic-level-bar');
+      const txt = $('#mic-level-text');
+      if (bar) bar.style.width = '0%';
+      if (txt) txt.textContent = '0%';
+      const btn = $('#btn-test-mic');
+      if (btn) {
+        btn.innerHTML = '<span>🎙️</span> Test Microphone';
+        btn.style.borderColor = 'var(--cyan)';
+        btn.style.color = 'var(--cyan)';
+      }
+      if (window.jarvisDesktop && typeof window.jarvisDesktop.setAudioLevel === 'function') {
+        try { window.jarvisDesktop.setAudioLevel(0.0); } catch (e) {}
+      }
+    }
+
+    if ($('#btn-test-mic')) {
+      $('#btn-test-mic').onclick = () => {
+        if (isTestingMic) stopMicTest();
+        else startMicTest();
+      };
+    }
+
+    // =========================================================================
+    // QWEBCHANNEL TWO-WAY DESKTOP SHELL BRIDGE
+    // =========================================================================
+    function initQWebChannel() {
+      if (typeof QWebChannel !== 'undefined' && window.qt && window.qt.webChannelTransport) {
+        new QWebChannel(window.qt.webChannelTransport, function(channel) {
+          window.jarvisDesktop = channel.objects.jarvisDesktop;
+          console.log("✅ QWebChannel connected to Python JarvisBridge!");
+          if (window.currentOrbState && typeof window.jarvisDesktop.setOrbState === 'function') {
+            window.jarvisDesktop.setOrbState(window.currentOrbState);
+          }
+        });
+      }
+    }
+
+    // Global Alt + Space Hotkey Activation Event
+    window.addEventListener('jarvis-hotkey-activate', () => {
+      console.log("⚡ Alt + Space Hotkey Activation received from Desktop Shell!");
+      const input = $('#user-input');
+      if (input) {
+        input.focus();
+        input.select();
+      }
+    });
+
+    // Auto-launch Desktop Sentinel Overlay on initial web app load & setup bridges
     window.addEventListener('load', () => {
-      setTimeout(() => window.triggerDesktopBubble(false), 800);
+      initQWebChannel();
+      populateMicDevices(false);
+      if (!window.jarvisDesktop) {
+        setTimeout(() => window.triggerDesktopBubble(false), 800);
+      }
     });
 
     // Auto-focus typing bar on keypress

@@ -56,7 +56,7 @@ def create_tray_icon() -> QIcon:
 
 def main():
     parser = argparse.ArgumentParser(description="J.A.R.V.I.S. Floating Desktop AI Bubble")
-    parser.add_argument("--url", default="http://localhost:8000", help="FastAPI backend URL (default: http://localhost:8000)")
+    parser.add_argument("--url", default=os.getenv("JARVIS_WEB_URL", "http://localhost:8765"), help="FastAPI backend URL (default: http://localhost:8765 or JARVIS_WEB_URL)")
     args = parser.parse_args()
 
     # Enable high-DPI scaling

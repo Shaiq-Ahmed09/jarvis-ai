@@ -2708,6 +2708,15 @@ def get_index():
     resp.headers["Expires"] = "0"
     return resp
 
+@app.get("/qwebchannel.js")
+def get_qwebchannel_js():
+    js_path = HERE / "frontend" / "qwebchannel.js"
+    if js_path.exists():
+        resp = FileResponse(js_path, media_type="application/javascript")
+        resp.headers["Cache-Control"] = "public, max-age=86400"
+        return resp
+    raise HTTPException(status_code=404, detail="qwebchannel.js not found")
+
 @app.get("/favicon.ico")
 def get_favicon():
     svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="45" fill="#03080e" stroke="#00f0ff" stroke-width="6"/><circle cx="50" cy="50" r="20" fill="#00f0ff" filter="drop-shadow(0 0 8px #00f0ff)"/></svg>'
