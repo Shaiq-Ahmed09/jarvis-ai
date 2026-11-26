@@ -2,17 +2,17 @@
 J.A.R.V.I.S. Floating Desktop Sentinel Bubble
 =============================================
 A native Windows always-on-top, transparent, draggable circular AI companion orb.
-Floats over all open applications, tabs, and desktop windows.
+Floats smoothly over all open applications, tabs, and desktop windows.
 
 Features:
-- Pure circular transparency (no rectangular borders, no taskbar clutter)
-- Organic breathing glow physics (smooth sine-wave animation loop)
+- Pure circular transparency with zero borders or window chrome
+- Organic breathing glow physics (smooth 60 FPS sine-wave animation loop)
 - Free draggable movement anywhere on the desktop
-- Single Click: Toggle voice interaction
+- Single Click: Toggle voice interaction / Speech Pill
 - Double Click: Maximize & open full Stark HUD frontend in browser
 - Right Click: Context menu with "👁️ See My Screen", "🚀 Maximize", "🎙️ Talk", "✕ Close"
 - Companion Speech Pill: Non-activating translucent speech card beside the bubble
-- Screen Vision: Captures screen and asks J.A.R.V.I.S. to analyze what you are viewing
+- Screen Vision: Captures screen and asks J.A.R.V.I.S. to analyze active windows
 """
 
 import sys
@@ -27,7 +27,7 @@ import webbrowser
 import ctypes
 from pathlib import Path
 
-# Enable high-DPI awareness on Windows so geometry is pixel-accurate
+# High-DPI awareness on Windows so coordinates and sizes are pixel-accurate
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(1)
 except Exception:
@@ -38,6 +38,16 @@ except Exception:
 
 user32 = ctypes.windll.user32
 
+# CRITICAL: Explicitly attach to the interactive user desktop 'Default' on WinSta0.
+# When processes are spawned from background agents, Windows may place them on an isolated
+# desktop (e.g. exebox-*). Switching to 'Default' guarantees the window is physically visible on screen!
+try:
+    h_desk = user32.OpenDesktopW("Default", 0, False, 0x10000000 | 0x01FF)
+    if h_desk:
+        user32.SetThreadDesktop(h_desk)
+except Exception as e:
+    print(f"Desktop attach notice: {e}")
+
 import tkinter as tk
 
 _HERE = Path(__file__).resolve().parent.parent
@@ -46,22 +56,11 @@ sys.path.insert(0, str(_HERE / "backend"))
 
 WS_URL = "ws://127.0.0.1:8765/ws"
 HUD_URL = "http://localhost:8765"
-TRANS_KEY = "#000001"  # Pure color key made 100% transparent by Windows DWM
-
-# Win32 Constants
-GWL_EXSTYLE = -20
-WS_EX_TOOLWINDOW = 0x00000080
-WS_EX_LAYERED = 0x00080000
-WS_EX_TOPMOST = 0x00000008
-HWND_TOPMOST = -1
-SWP_NOSIZE = 0x0001
-SWP_NOMOVE = 0x0002
-SWP_NOACTIVATE = 0x0010
-SWP_SHOWWINDOW = 0x0040
+TRANS_KEY = "#000001"  # Cutout transparent color on Windows
 
 
 class SpeechPill(tk.Toplevel):
-    """Floating translucent card appearing next to bubble without stealing window focus."""
+    """Floating translucent speech card beside the bubble without stealing window focus."""
     def __init__(self, master):
         super().__init__(master)
         self.overrideredirect(True)
@@ -98,20 +97,20 @@ class SpeechPill(tk.Toplevel):
         self.update_idletasks()
         bx = self.master.winfo_x()
         by = self.master.winfo_y()
-        sw = user32.GetSystemMetrics(0)
+        sw = self.winfo_screenwidth()
 
         pw = max(220, min(320, len(text) * 7 + 40))
         ph = max(65, min(180, (len(text) // 30 + 2) * 22 + 30))
 
         if bx + 140 + pw < sw:
-            px = bx + 130
+            px = bx + 135
         else:
             px = bx - pw - 10
         py = max(20, by)
 
-        hwnd = self.winfo_id()
-        user32.SetWindowPos(hwnd, HWND_TOPMOST, px, py, pw, ph, SWP_SHOWWINDOW | SWP_NOACTIVATE)
+        self.geometry(f"{pw}x{ph}+{px}+{py}")
         self.deiconify()
+        self.lift()
 
         self._hide_timer = self.after(duration_ms, self.withdraw)
 
@@ -123,14 +122,15 @@ class DesktopSentinelBubble(tk.Tk):
         self.title("J.A.R.V.I.S. Desktop Bubble")
         self.overrideredirect(True)
         self.attributes("-topmost", True)
+        self.attributes("-toolwindow", True)
         self.attributes("-transparentcolor", TRANS_KEY)
         self.configure(bg=TRANS_KEY)
 
-        # Bubble Dimensions: 120x120 px
-        self.size = 120
-        screen_w = user32.GetSystemMetrics(0)
-        screen_h = user32.GetSystemMetrics(1)
-        self.x = screen_w - self.size - 40
+        # Bubble Dimensions: 130x130 px (clearly visible, easy to click and move)
+        self.size = 130
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        self.x = screen_w - self.size - 50
         self.y = screen_h - self.size - 130
         self.geometry(f"{self.size}x{self.size}+{self.x}+{self.y}")
 
@@ -166,7 +166,7 @@ class DesktopSentinelBubble(tk.Tk):
         self.menu.add_separator()
         self.menu.add_command(label="✕   Close Bubble", command=self.destroy)
 
-        # Speech pill
+        # Speech pill companion
         self.pill = SpeechPill(self)
 
         # State & Animation Variables
@@ -183,20 +183,38 @@ class DesktopSentinelBubble(tk.Tk):
             "radon": {"glow": "#ffaa00", "core": "#fbbf24", "ring": "#d97706"},
         }
 
-        # Apply Win32 Extended Styles: ToolWindow (no taskbar clutter) & Topmost
-        self.update_idletasks()
-        self.hwnd = self.winfo_id()
-        exstyle = user32.GetWindowLongW(self.hwnd, GWL_EXSTYLE)
-        user32.SetWindowLongW(self.hwnd, GWL_EXSTYLE, exstyle | WS_EX_TOOLWINDOW | WS_EX_TOPMOST)
-        user32.SetWindowPos(self.hwnd, HWND_TOPMOST, self.x, self.y, self.size, self.size, SWP_SHOWWINDOW)
-
         # WebSocket Connection
         self.ws = None
         self.ws_loop = None
         self._start_ws_client()
 
+        # Lift & display
+        self.lift()
+        self.attributes("-topmost", True)
+        self.update()
+
+        self._frame_count = 0
+        self._setup_topmost_handle()
+
         # Start Organic Breathing Animation Loop
         self._animate()
+
+    def _setup_topmost_handle(self):
+        try:
+            from ctypes import wintypes
+            user32 = ctypes.windll.user32
+            user32.SetWindowPos.argtypes = [
+                wintypes.HWND, wintypes.HWND,
+                ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                ctypes.c_uint
+            ]
+            user32.SetWindowPos.restype = wintypes.BOOL
+            w_id = self.winfo_id()
+            self.top_hwnd = user32.GetParent(w_id) or w_id
+            # HWND_TOPMOST (-1), SWP_NOSIZE (1) | SWP_NOMOVE (2) | SWP_NOACTIVATE (0x10) | SWP_SHOWWINDOW (0x40)
+            user32.SetWindowPos(self.top_hwnd, wintypes.HWND(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010 | 0x0040)
+        except Exception as e:
+            print(f"Topmost setup notice: {e}")
 
     def _on_mouse_down(self, event):
         self._drag_start["x"] = event.x
@@ -206,11 +224,11 @@ class DesktopSentinelBubble(tk.Tk):
     def _on_mouse_drag(self, event):
         dx = event.x - self._drag_start["x"]
         dy = event.y - self._drag_start["y"]
-        if abs(dx) > 3 or abs(dy) > 3:
+        if abs(dx) > 2 or abs(dy) > 2:
             self._is_dragging = True
-            self.x = self.winfo_x() + dx
-            self.y = self.winfo_y() + dy
-            user32.SetWindowPos(self.hwnd, HWND_TOPMOST, self.x, self.y, self.size, self.size, SWP_SHOWWINDOW | SWP_NOACTIVATE)
+            new_x = self.winfo_x() + dx
+            new_y = self.winfo_y() + dy
+            self.geometry(f"+{new_x}+{new_y}")
 
     def _on_mouse_up(self, event):
         if not self._is_dragging:
@@ -226,8 +244,26 @@ class DesktopSentinelBubble(tk.Tk):
             self.menu.grab_release()
 
     def _open_full_hud(self):
-        """Maximize and launch the full frontend at http://localhost:8765."""
+        """Maximize and open the full frontend at http://localhost:8765, restoring browser if minimized."""
         self.pill.show("◈ STARK HUD", "Maximizing full neural workspace in browser...", 3500)
+        try:
+            import win32gui, win32process, win32con, psutil
+            def restore_cb(hwnd, _):
+                if win32gui.IsWindow(hwnd):
+                    _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                    try:
+                        pname = psutil.Process(pid).name().lower()
+                        title = win32gui.GetWindowText(hwnd).lower()
+                        if any(b in pname for b in ["brave", "chrome", "msedge", "firefox", "opera"]):
+                            if any(k in title for k in ["gemini", "jarvis", "localhost", "8765", "bubble", "stark"]):
+                                win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                                win32gui.SetForegroundWindow(hwnd)
+                    except Exception:
+                        pass
+                return True
+            win32gui.EnumWindows(restore_cb, None)
+        except Exception:
+            pass
         webbrowser.open(HUD_URL)
 
     def _analyze_screen(self):
@@ -318,24 +354,24 @@ class DesktopSentinelBubble(tk.Tk):
         core_col = pal["core"]
         ring_col = pal["ring"]
 
-        # 1. Outer Soft Breathing Aura Halo (smooth pulse)
-        r_halo = 46 + breath * 4.5
+        # 1. Base Solid Cyberpunk Disc (fills entire circle so clicks & drags register 100%)
+        r_base = 50 + breath * 3.5
+        self.canvas.create_oval(
+            cx - r_base, cy - r_base,
+            cx + r_base, cy + r_base,
+            fill="#030d1e", outline=glow_col, width=2.5
+        )
+
+        # 2. Secondary Glowing Halo Ring
+        r_halo = 44 + breath * 2.5
         self.canvas.create_oval(
             cx - r_halo, cy - r_halo,
             cx + r_halo, cy + r_halo,
-            outline=glow_col, width=2.0
-        )
-
-        # 2. Secondary Glowing Disc (Dark metallic inner space)
-        r_disc = 39 + breath * 3.0
-        self.canvas.create_oval(
-            cx - r_disc, cy - r_disc,
-            cx + r_disc, cy + r_disc,
-            fill="#030e20", outline=ring_col, width=2.5
+            fill="", outline=ring_col, width=1.5
         )
 
         # 3. Rotating Cybernetic Segmented Arc Ring (Stark Mark VII Gyro)
-        r_arc = 34 + breath * 1.5
+        r_arc = 37 + breath * 1.5
         for offset in (0, 120, 240):
             start = (self.ring_angle + offset) % 360
             self.canvas.create_arc(
@@ -346,7 +382,7 @@ class DesktopSentinelBubble(tk.Tk):
             )
 
         # 4. Inner Breathing Arc Reactor Core
-        r_core = 23 + breath * 2.2
+        r_core = 24 + breath * 2.2
         self.canvas.create_oval(
             cx - r_core, cy - r_core,
             cx + r_core, cy + r_core,
@@ -354,16 +390,21 @@ class DesktopSentinelBubble(tk.Tk):
         )
 
         # 5. Brilliant Center White Core Spark
-        r_spark = 8 + breath * 1.0
+        r_spark = 9 + breath * 1.0
         self.canvas.create_oval(
             cx - r_spark, cy - r_spark,
             cx + r_spark, cy + r_spark,
             fill="#ffffff", outline=""
         )
 
-        # Maintain topmost Z-order every 50 frames
-        if int(self.ring_angle) % 40 == 0:
-            user32.SetWindowPos(self.hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE)
+        # Periodically ensure topmost without stealing focus
+        self._frame_count += 1
+        if self._frame_count % 60 == 0:
+            try:
+                from ctypes import wintypes
+                ctypes.windll.user32.SetWindowPos(self.top_hwnd, wintypes.HWND(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010)
+            except Exception:
+                pass
 
         # 16 ms = ~60 FPS
         self.after(16, self._animate)

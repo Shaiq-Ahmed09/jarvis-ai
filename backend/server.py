@@ -2702,7 +2702,11 @@ class JarvisSession:
 
 @app.get("/")
 def get_index():
-    return FileResponse(FRONTEND_INDEX)
+    resp = FileResponse(FRONTEND_INDEX)
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 @app.get("/favicon.ico")
 def get_favicon():
@@ -2722,16 +2726,54 @@ async def proxy_image(url: str):
 
 _desktop_bubble_proc = None
 
-def launch_desktop_bubble() -> bool:
+def minimize_browser_window():
+    """Minimizes the user's active browser window (Brave/Chrome/Edge/Firefox) down to the taskbar."""
+    try:
+        user32 = ctypes.windll.user32
+        h_desk = user32.OpenDesktopW("Default", 0, False, 0x10000000 | 0x01FF)
+        if h_desk:
+            user32.SetThreadDesktop(h_desk)
+        import win32gui, win32process, win32con
+        def cb(hwnd, _):
+            if win32gui.IsWindowVisible(hwnd):
+                _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                try:
+                    pname = psutil.Process(pid).name().lower()
+                    title = win32gui.GetWindowText(hwnd).lower()
+                    if any(b in pname for b in ["brave", "chrome", "msedge", "firefox", "opera"]):
+                        if any(k in title for k in ["gemini", "jarvis", "localhost", "8765", "bubble"]):
+                            win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
+                except Exception:
+                    pass
+            return True
+        win32gui.EnumWindows(cb, None)
+    except Exception as e:
+        print(f"Notice minimizing browser: {e}")
+
+def launch_desktop_bubble(minimize_browser: bool = False) -> bool:
     global _desktop_bubble_proc
     try:
-        if _desktop_bubble_proc is not None and _desktop_bubble_proc.poll() is None:
-            return True  # Already running
-        python_exe = sys.executable
-        pythonw = Path(python_exe).parent / "pythonw.exe"
-        exe = str(pythonw) if pythonw.exists() else python_exe
-        script = str(ROOT_DIR / "backend" / "overlay.py")
-        _desktop_bubble_proc = subprocess.Popen([exe, script])
+        # Check if overlay is already alive and running
+        already_running = False
+        for p in psutil.process_iter(['pid', 'cmdline']):
+            try:
+                cmd = p.info.get('cmdline') or []
+                if any('overlay.py' in arg for arg in cmd):
+                    already_running = True
+                    break
+            except Exception:
+                pass
+
+        if not already_running:
+            python_exe = sys.executable
+            script = str(ROOT_DIR / "backend" / "overlay.py")
+            si = subprocess.STARTUPINFO()
+            si.lpDesktop = r"WinSta0\Default"
+            _desktop_bubble_proc = subprocess.Popen([python_exe, script], startupinfo=si)
+
+        if minimize_browser:
+            minimize_browser_window()
+
         return True
     except Exception as e:
         print(f"Error launching desktop bubble: {e}")
@@ -2739,18 +2781,21 @@ def launch_desktop_bubble() -> bool:
 
 def stop_desktop_bubble() -> bool:
     global _desktop_bubble_proc
-    if _desktop_bubble_proc is not None and _desktop_bubble_proc.poll() is None:
+    killed = False
+    for p in psutil.process_iter(['pid', 'cmdline']):
         try:
-            _desktop_bubble_proc.terminate()
-            _desktop_bubble_proc = None
-            return True
+            cmd = p.info.get('cmdline') or []
+            if any('overlay.py' in arg for arg in cmd):
+                p.terminate()
+                killed = True
         except Exception:
             pass
-    return False
+    _desktop_bubble_proc = None
+    return killed
 
 @app.get("/api/bubble/show")
-async def api_show_bubble():
-    ok = launch_desktop_bubble()
+async def api_show_bubble(minimize: bool = True):
+    ok = launch_desktop_bubble(minimize_browser=minimize)
     return {"status": "ok", "launched": ok}
 
 @app.get("/api/bubble/hide")
@@ -2882,7 +2927,8 @@ async def websocket_handler(ws: WebSocket):
                     await session.send(type="log", text=f"📲 Instagram DM Automation: {state} | Last scan: {st['last_scan'] or 'N/A'} | Replies: {st['total_replied']}")
 
             elif msg_type == "show_desktop_bubble":
-                launched = launch_desktop_bubble()
+                min_b = data.get("minimize_browser", True)
+                launched = launch_desktop_bubble(minimize_browser=min_b)
                 await session.send(type="log", text="🔮 Desktop Sentinel Bubble activated on Windows screen.")
                 await session.send(type="bubble_status", active=True, launched=launched)
 

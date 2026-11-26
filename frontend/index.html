@@ -913,7 +913,7 @@
 
   <!-- Top Navigation (Subtle Floating Action & Settings) -->
   <header id="top-nav">
-    <button class="action-pill-btn" id="btn-min-to-desktop" title="Minimize Web App & Activate Floating Desktop Bubble" style="border-color: var(--cyan); color: var(--cyan); font-weight: 600;">
+    <button class="action-pill-btn" id="btn-min-to-desktop" onclick="triggerDesktopBubble()" title="Minimize Web App & Activate Floating Desktop Bubble" style="border-color: var(--cyan); color: var(--cyan); font-weight: 600; cursor: pointer;">
       <span>🔮</span> Minimize to Desktop Bubble
     </button>
     <button class="settings-btn" id="btn-open-settings" title="Open Settings & Protocols">
@@ -1658,38 +1658,46 @@
     };
 
     // Desktop Floating Bubble Launcher & Minimize Trigger
-    function triggerDesktopBubble() {
-      sendWS({ type: 'show_desktop_bubble' });
-      fetch('/api/bubble/show').catch(() => {});
-    }
+    window.triggerDesktopBubble = function(minimizeBrowser = true) {
+      const b = document.getElementById('btn-min-to-desktop');
+      if (b && minimizeBrowser) {
+        b.innerHTML = '<span>🔮</span> Minimizing to Desktop...';
+      }
+      sendWS({ type: 'show_desktop_bubble', minimize_browser: minimizeBrowser });
+      fetch('/api/bubble/show?minimize=' + (minimizeBrowser ? 'true' : 'false'))
+        .then(r => r.json())
+        .then(data => {
+          console.log("Desktop Bubble API response:", data);
+          if (b) {
+            b.innerHTML = '<span>✅</span> Bubble Active on Screen!';
+            setTimeout(() => b.innerHTML = '<span>🔮</span> Minimize to Desktop Bubble', 3500);
+          }
+          const lb = document.getElementById('btn-launch-desktop-bubble');
+          if (lb) {
+            lb.textContent = '✅ Floating Bubble Active on Desktop!';
+            setTimeout(() => lb.textContent = '🚀 Summon Floating Desktop Bubble', 3500);
+          }
+        })
+        .catch(err => console.error("Error launching bubble:", err));
+    };
 
     if ($('#btn-min-to-desktop')) {
-      $('#btn-min-to-desktop').onclick = () => {
-        triggerDesktopBubble();
-        const b = $('#btn-min-to-desktop');
-        b.innerHTML = '<span>✅</span> Bubble Active on Screen!';
-        setTimeout(() => b.innerHTML = '<span>🔮</span> Minimize to Desktop Bubble', 3500);
-      };
+      $('#btn-min-to-desktop').onclick = () => window.triggerDesktopBubble(true);
     }
 
     if ($('#btn-launch-desktop-bubble')) {
-      $('#btn-launch-desktop-bubble').onclick = () => {
-        triggerDesktopBubble();
-        const btn = $('#btn-launch-desktop-bubble');
-        btn.textContent = '✅ Floating Bubble Active on Desktop!';
-        setTimeout(() => btn.textContent = '🚀 Summon Floating Desktop Bubble', 3500);
-      };
+      $('#btn-launch-desktop-bubble').onclick = () => window.triggerDesktopBubble(true);
     }
 
     // Auto-summon Desktop Bubble whenever the web app is minimized or hidden
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
-        triggerDesktopBubble();
+        window.triggerDesktopBubble(false);
       }
     });
 
     window.addEventListener('blur', () => {
-      triggerDesktopBubble();
+      window.triggerDesktopBubble(false);
     });
 
     // Auto-focus typing bar on keypress
