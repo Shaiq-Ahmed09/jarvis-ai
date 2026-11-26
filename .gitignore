@@ -20,6 +20,7 @@ build/
 data/
 cortex_db/
 archive/
+frontend/index_hud_v1.html
 
 # Portable Binaries & Development Tools
 tools/
