@@ -2708,6 +2708,11 @@ def get_index():
     resp.headers["Expires"] = "0"
     return resp
 
+@app.get("/health")
+async def api_health():
+    """Health check endpoint for desktop launcher, tests, and orchestrators."""
+    return {"status": "ok", "service": "J.A.R.V.I.S. Core", "online": True}
+
 @app.get("/qwebchannel.js")
 def get_qwebchannel_js():
     js_path = HERE / "frontend" / "qwebchannel.js"

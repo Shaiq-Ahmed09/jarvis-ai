@@ -177,6 +177,7 @@ class JarvisBridge(QObject):
     wakeTriggered = Signal(str)
     screenCaptured = Signal(str)
     clipboardActivated = Signal(str)
+    transcriptUpdated = Signal(str, str)
 
     def __init__(self, parent_bubble=None):
         super().__init__(parent_bubble)
@@ -201,6 +202,16 @@ class JarvisBridge(QObject):
     def setMicDevice(self, label: str, device_id: str):
         """Allows JavaScript to notify Python of the user's selected microphone hardware."""
         self.micDeviceChanged.emit(str(label), str(device_id))
+
+    @Slot(str)
+    def updateTranscript(self, text: str):
+        """Allows JavaScript to stream live voice transcript to the Compact Mini-HUD."""
+        self.transcriptUpdated.emit(str(text), "jarvis")
+
+    @Slot(str, str)
+    def updateTranscriptSpeaker(self, text: str, speaker: str):
+        """Allows JavaScript to stream transcript with specific speaker ('user' | 'jarvis' | 'system')."""
+        self.transcriptUpdated.emit(str(text), str(speaker))
 
     @Slot(result=str)
     def captureActiveScreen(self) -> str:
@@ -272,18 +283,20 @@ class JarvisWebEnginePage(QWebEnginePage):
 
 
 class MiniOrbWidget(QWidget):
-    """Synchronized live animated mini-orb widget in the popup header."""
-    def __init__(self, parent_bubble):
+    """Synchronized live animated mini-orb widget for headers and compact HUD."""
+    def __init__(self, parent_bubble, size: int = 26):
         super().__init__()
         self.bubble = parent_bubble
-        self.setFixedSize(26, 26)
+        self.orb_size = size
+        self.setFixedSize(size, size)
 
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
-        cx, cy = 13.0, 13.0
-        r = 10.0
+        s = float(self.orb_size)
+        cx, cy = s / 2.0, s / 2.0
+        r = (s / 2.0) - 3.0
 
         # Mini rotating arc
         if self.bubble.state == "thinking":
@@ -295,14 +308,16 @@ class MiniOrbWidget(QWidget):
         else:
             arc_color = QColor("#00f0ff")
 
-        arc_pen = QPen(arc_color, 1.4)
+        arc_width = max(1.4, s * 0.055)
+        arc_pen = QPen(arc_color, arc_width)
         arc_pen.setCapStyle(Qt.RoundCap)
         painter.setPen(arc_pen)
         painter.setBrush(Qt.NoBrush)
         painter.drawArc(QRectF(cx - r, cy - r, r * 2, r * 2), int(self.bubble._ring_angle_outer * 16), int(120 * 16))
 
         # Core orb
-        grad = QRadialGradient(cx, cy, 7.0)
+        core_r = max(4.0, s * 0.26)
+        grad = QRadialGradient(cx, cy, core_r)
         if self.bubble.state == "listening":
             grad.setColorAt(0.0, QColor("#10b981"))
             grad.setColorAt(1.0, QColor("#022c22"))
@@ -318,11 +333,158 @@ class MiniOrbWidget(QWidget):
 
         painter.setPen(Qt.NoPen)
         painter.setBrush(QBrush(grad))
-        painter.drawEllipse(QPoint(int(cx), int(cy)), 6, 6)
+        painter.drawEllipse(QPoint(int(cx), int(cy)), int(core_r), int(core_r))
 
         # Center spark
+        spark_r = max(1.5, s * 0.08)
         painter.setBrush(QColor("#ffffff"))
-        painter.drawEllipse(QPoint(int(cx), int(cy)), 2, 2)
+        painter.drawEllipse(QPoint(int(cx), int(cy)), int(spark_r), int(spark_r))
+
+
+class CompactHudWidget(QFrame):
+    """
+    Compact Mini-HUD Mode (320x110px floating pill):
+    Shows live animated AI orb, real-time voice transcript, status indicator,
+    and stop/mute, full-restore, and minimize buttons.
+    Entire card is draggable.
+    """
+    def __init__(self, parent_bubble):
+        super().__init__()
+        self.bubble = parent_bubble
+        self._is_dragging = False
+        self._drag_start = QPoint()
+        self._start_pos = QPoint()
+        self.setObjectName("compactHudWidget")
+        self.setStyleSheet("""
+            #compactHudWidget {
+                background: rgba(10, 16, 28, 0.94);
+                border: 1px solid rgba(0, 240, 255, 0.5);
+                border-radius: 18px;
+            }
+        """)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(10)
+
+        # 1. Left: Live Animated Medium Orb
+        self.orb = MiniOrbWidget(self.bubble, size=46)
+        layout.addWidget(self.orb, 0, Qt.AlignCenter)
+
+        # 2. Center: Real-Time Voice Transcript & Status
+        center_layout = QVBoxLayout()
+        center_layout.setContentsMargins(0, 2, 0, 2)
+        center_layout.setSpacing(3)
+
+        self.status_label = QLabel("● J.A.R.V.I.S. VOICE HUD")
+        self.status_label.setFont(QFont("Consolas", 8, QFont.Bold))
+        self.status_label.setStyleSheet("color: #00f0ff; letter-spacing: 0.8px;")
+        center_layout.addWidget(self.status_label)
+
+        self.transcript_label = QLabel("Standing by for voice directives, Sir...")
+        self.transcript_label.setFont(QFont("Segoe UI", 9))
+        self.transcript_label.setStyleSheet("color: #e2e8f0; line-height: 1.3;")
+        self.transcript_label.setWordWrap(True)
+        self.transcript_label.setMaximumHeight(54)
+        center_layout.addWidget(self.transcript_label)
+
+        layout.addLayout(center_layout, 1)
+
+        # 3. Right: Action Controls (Mute/Stop, Full Web View, Minimize)
+        btn_layout = QVBoxLayout()
+        btn_layout.setContentsMargins(0, 0, 0, 0)
+        btn_layout.setSpacing(6)
+
+        # Top row: Restore Full Mode & Minimize
+        top_btns = QHBoxLayout()
+        top_btns.setSpacing(6)
+
+        self.btn_expand_full = QPushButton("⤢")
+        self.btn_expand_full.setObjectName("btnCompactAction")
+        self.btn_expand_full.setToolTip("Restore Full Web App Mode (420x640)")
+        self.btn_expand_full.setFixedSize(24, 24)
+        self.btn_expand_full.setCursor(Qt.PointingHandCursor)
+        self.btn_expand_full.clicked.connect(self.bubble.toggle_popup_mode)
+        top_btns.addWidget(self.btn_expand_full)
+
+        self.btn_min = QPushButton("—")
+        self.btn_min.setObjectName("btnCompactAction")
+        self.btn_min.setToolTip("Minimize to Desktop Bubble (Esc)")
+        self.btn_min.setFixedSize(24, 24)
+        self.btn_min.setCursor(Qt.PointingHandCursor)
+        self.btn_min.clicked.connect(self.bubble.collapse_bubble)
+        top_btns.addWidget(self.btn_min)
+        btn_layout.addLayout(top_btns)
+
+        # Bottom row: Stop / Mute speech
+        self.btn_mute_stop = QPushButton("🛑 Stop")
+        self.btn_mute_stop.setObjectName("btnCompactStop")
+        self.btn_mute_stop.setToolTip("Stop speech / cancel current directive")
+        self.btn_mute_stop.setFixedHeight(24)
+        self.btn_mute_stop.setCursor(Qt.PointingHandCursor)
+        self.btn_mute_stop.clicked.connect(self.bubble.stop_directive)
+        btn_layout.addWidget(self.btn_mute_stop)
+
+        layout.addLayout(btn_layout, 0)
+
+        self.setStyleSheet(self.styleSheet() + """
+            QPushButton#btnCompactAction {
+                background: rgba(15, 23, 42, 0.85);
+                border: 1px solid rgba(0, 240, 255, 0.3);
+                border-radius: 12px;
+                color: #00f0ff;
+                font-size: 11px;
+                font-weight: bold;
+            }
+            QPushButton#btnCompactAction:hover {
+                background: rgba(0, 240, 255, 0.25);
+                border-color: #00f0ff;
+            }
+            QPushButton#btnCompactStop {
+                background: rgba(239, 68, 68, 0.18);
+                border: 1px solid rgba(239, 68, 68, 0.45);
+                border-radius: 12px;
+                color: #fca5a5;
+                font-size: 10px;
+                font-weight: bold;
+                padding: 0 8px;
+            }
+            QPushButton#btnCompactStop:hover {
+                background: rgba(239, 68, 68, 0.35);
+                border-color: #ef4444;
+                color: #ffffff;
+            }
+        """)
+
+    def set_transcript(self, text: str, speaker: str = "jarvis"):
+        self.transcript_label.setText(text)
+        s = str(speaker).lower()
+        if s == "user":
+            self.status_label.setText("● SIR")
+            self.status_label.setStyleSheet("color: #10b981; letter-spacing: 0.8px;")
+        elif s == "system":
+            self.status_label.setText("● LISTENING")
+            self.status_label.setStyleSheet("color: #10b981; letter-spacing: 0.8px;")
+        else:
+            self.status_label.setText("● J.A.R.V.I.S.")
+            self.status_label.setStyleSheet("color: #00f0ff; letter-spacing: 0.8px;")
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._is_dragging = True
+            self._drag_start = event.globalPosition().toPoint()
+            self._start_pos = self.bubble.pos()
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if self._is_dragging and (event.buttons() & Qt.LeftButton):
+            cur = event.globalPosition().toPoint()
+            self.bubble.move(self._start_pos + (cur - self._drag_start))
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        self._is_dragging = False
+        event.accept()
 
 
 class TopDragBar(QFrame):
@@ -377,6 +539,7 @@ class DesktopAIBubble(QWidget):
         # Determine target web URL: prioritize argument, then environment, default to 8765
         self.backend_url = backend_url or os.getenv("JARVIS_WEB_URL", "http://localhost:8765")
         self.is_expanded = False
+        self.popup_mode = "full"  # "full" (420x640) or "compact" (320x110)
         self.state = "idle"  # "idle", "listening", "thinking", "speaking"
         self._is_dragging = False
         self._drag_start = QPoint()
@@ -566,7 +729,14 @@ class DesktopAIBubble(QWidget):
         top_layout.addWidget(self.status_pill)
         top_layout.addStretch()
 
-        # Action Buttons: Reload, Open in Browser, Minimize
+        # Action Buttons: Compact HUD Toggle, Reload, Open in Browser, Minimize
+        self.btn_compact = QPushButton("🎙️")
+        self.btn_compact.setObjectName("btnHeaderAction")
+        self.btn_compact.setToolTip("Switch to Compact Voice HUD Mode (320x110)")
+        self.btn_compact.setFixedSize(26, 26)
+        self.btn_compact.setCursor(Qt.PointingHandCursor)
+        self.btn_compact.clicked.connect(self.toggle_popup_mode)
+
         self.btn_reload = QPushButton("🔄")
         self.btn_reload.setObjectName("btnHeaderAction")
         self.btn_reload.setToolTip("Reload Web Interface")
@@ -603,12 +773,18 @@ class DesktopAIBubble(QWidget):
             }
         """)
 
+        top_layout.addWidget(self.btn_compact)
         top_layout.addWidget(self.btn_reload)
         top_layout.addWidget(self.btn_hud)
         top_layout.addWidget(self.btn_min)
         card_layout.addWidget(self.top_drag_bar)
 
-        # 2. Embedded QWebEngineView with QWebChannel Bridge
+        # 2. Compact Voice HUD Widget (320x110 Pill)
+        self.compact_hud_widget = CompactHudWidget(self)
+        self.compact_hud_widget.hide()
+        card_layout.addWidget(self.compact_hud_widget)
+
+        # 3. Embedded QWebEngineView with QWebChannel Bridge
         self.web_view = QWebEngineView(self.card)
         self.web_page = JarvisWebEnginePage(self.web_view)
         self.web_page.setBackgroundColor(Qt.transparent)
@@ -622,6 +798,7 @@ class DesktopAIBubble(QWidget):
         self.bridge.orbStateChanged.connect(self.set_state)
         self.bridge.audioLevelChanged.connect(self.set_audio_level)
         self.bridge.minimizeRequested.connect(self.collapse_bubble)
+        self.bridge.transcriptUpdated.connect(self.set_transcript)
         if hasattr(self, "wake_worker"):
             self.bridge.micDeviceChanged.connect(self.wake_worker.set_microphone)
         self.channel.registerObject("jarvisDesktop", self.bridge)
@@ -697,8 +874,10 @@ class DesktopAIBubble(QWidget):
         if not self.is_expanded:
             self.update()
         else:
-            if hasattr(self, "mini_orb"):
+            if hasattr(self, "mini_orb") and getattr(self, "popup_mode", "full") == "full":
                 self.mini_orb.update()
+            if hasattr(self, "compact_hud_widget") and self.compact_hud_widget.isVisible():
+                self.compact_hud_widget.orb.update()
 
     # -------------------------------------------------------------------------
     # Multi-Layer QPainter Sci-Fi HUD Orb (96x96 Canvas, 60x60 Core)
@@ -965,7 +1144,7 @@ class DesktopAIBubble(QWidget):
         self.snap_anim.start()
 
     # -------------------------------------------------------------------------
-    # Expand / Collapse Mechanics (220ms, QEasingCurve.OutExpo)
+    # Expand / Collapse Mechanics & Mode Switching (Full vs Compact HUD)
     # -------------------------------------------------------------------------
     def toggle_expand(self):
         if self.is_expanded:
@@ -973,8 +1152,52 @@ class DesktopAIBubble(QWidget):
         else:
             self.expand_popup()
 
+    def toggle_popup_mode(self):
+        """Switches between Full Web App Mode (420x640) and Compact Mini-HUD Mode (320x110)."""
+        new_mode = "compact" if self.popup_mode == "full" else "full"
+        self.set_popup_mode(new_mode)
+
+    def set_popup_mode(self, mode: str):
+        """Sets the popup mode ('full' or 'compact') with smooth geometric transition."""
+        if mode not in ("full", "compact"):
+            return
+        self.popup_mode = mode
+        if not self.is_expanded:
+            return
+
+        cur_x, cur_y = self.x(), self.y()
+        cur_w, cur_h = self.width(), self.height()
+        screen = QApplication.primaryScreen().availableGeometry()
+
+        if self.popup_mode == "compact":
+            target_w, target_h = 320, 110
+            self.top_drag_bar.hide()
+            self.web_view.hide()
+            self.compact_hud_widget.show()
+        else:
+            target_w, target_h = 420, 640
+            self.compact_hud_widget.hide()
+            self.top_drag_bar.show()
+            self.web_view.show()
+
+        if self._dock_side == "left":
+            target_x = cur_x
+        else:
+            target_x = cur_x + cur_w - target_w
+        target_y = cur_y + cur_h - target_h
+
+        target_x = max(screen.left() + 12, min(target_x, screen.right() - target_w - 12))
+        target_y = max(screen.top() + 12, min(target_y, screen.bottom() - target_h - 12))
+
+        self.geom_anim.stop()
+        self.geom_anim.setDuration(200)
+        self.geom_anim.setEasingCurve(QEasingCurve.OutExpo)
+        self.geom_anim.setStartValue(self.geometry())
+        self.geom_anim.setEndValue(QRect(target_x, target_y, target_w, target_h))
+        self.geom_anim.start()
+
     def expand_popup(self):
-        """Smoothly expands to 420x640px, anchored from bubble corner with Windows 11 DWM blur."""
+        """Smoothly expands to full (420x640) or compact (320x110) mode, anchored from bubble corner with Windows 11 DWM blur."""
         if self.is_expanded:
             self.activateWindow()
             self._dispatch_hotkey_activation()
@@ -984,7 +1207,17 @@ class DesktopAIBubble(QWidget):
         cur_x, cur_y = self.x(), self.y()
         cur_w, cur_h = self.width(), self.height()
 
-        target_w, target_h = 420, 640
+        if self.popup_mode == "compact":
+            target_w, target_h = 320, 110
+            self.top_drag_bar.hide()
+            self.web_view.hide()
+            self.compact_hud_widget.show()
+        else:
+            target_w, target_h = 420, 640
+            self.compact_hud_widget.hide()
+            self.top_drag_bar.show()
+            self.web_view.show()
+
         screen = QApplication.primaryScreen().availableGeometry()
 
         # Anchor corner based on screen dock side
@@ -1023,6 +1256,8 @@ class DesktopAIBubble(QWidget):
 
         self.is_expanded = False
         self.card.hide()
+        if hasattr(self, "compact_hud_widget"):
+            self.compact_hud_widget.hide()
 
         # Disable Acrylic/BlurBehind immediately so no square backdrop remains on screen
         try:
@@ -1052,11 +1287,35 @@ class DesktopAIBubble(QWidget):
         if self.is_expanded:
             self.clearMask()
             self.card.show()
+            if self.popup_mode == "compact":
+                self.top_drag_bar.hide()
+                self.web_view.hide()
+                self.compact_hud_widget.show()
+            else:
+                self.compact_hud_widget.hide()
+                self.top_drag_bar.show()
+                self.web_view.show()
             self._dispatch_hotkey_activation()
         else:
             self.card.hide()
+            if hasattr(self, "compact_hud_widget"):
+                self.compact_hud_widget.hide()
             self._update_mask()
             self.update()
+
+    def set_transcript(self, text: str, speaker: str = "jarvis"):
+        """Updates real-time voice transcript in Compact HUD."""
+        if hasattr(self, "compact_hud_widget"):
+            self.compact_hud_widget.set_transcript(text, speaker)
+
+    def stop_directive(self):
+        """Cancels TTS playback and stops active directive execution."""
+        if hasattr(self, "web_view") and self.web_view.page():
+            self.web_view.page().runJavaScript(
+                'window.dispatchEvent(new CustomEvent("jarvis-stop"));'
+            )
+        self.set_state("idle")
+        self.set_transcript("Directive stopped, Sir.", "jarvis")
 
     def _dispatch_hotkey_activation(self):
         """Dispatches custom event 'jarvis-hotkey-activate' into the embedded web application."""

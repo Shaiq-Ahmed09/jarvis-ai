@@ -1490,6 +1490,9 @@
 
         if (msg.type === 'say' || msg.type === 'say_text') {
           setOrbState('speaking');
+          if (window.jarvisDesktop && typeof window.jarvisDesktop.updateTranscriptSpeaker === 'function') {
+            try { window.jarvisDesktop.updateTranscriptSpeaker(msg.text, 'jarvis'); } catch (e) {}
+          }
           spawnOrUpdateResultWindow(msg.id, msg.text, msg.query || '', msg.media || null);
           if (!isSilentMode && $('#toggle-neural-voice').checked && msg.audio) {
             playNeuralAudio(msg.audio);
@@ -1499,6 +1502,9 @@
         }
         else if (msg.type === 'say_stream_text') {
           setOrbState('speaking');
+          if (window.jarvisDesktop && typeof window.jarvisDesktop.updateTranscriptSpeaker === 'function') {
+            try { window.jarvisDesktop.updateTranscriptSpeaker(msg.text, 'jarvis'); } catch (e) {}
+          }
           streamTextToWindow(msg.id, msg.text);
         }
         else if (msg.type === 'say_stream_end') {
@@ -2004,6 +2010,9 @@
       dismissClipboardContext();
       detachScreenVision();
       setOrbState('thinking');
+      if (window.jarvisDesktop && typeof window.jarvisDesktop.updateTranscriptSpeaker === 'function') {
+        try { window.jarvisDesktop.updateTranscriptSpeaker(text, 'user'); } catch (e) {}
+      }
 
       // Create a speculative placeholder window instantly
       const tempId = `query_${Date.now()}`;
@@ -2035,6 +2044,9 @@
 
     async function startAudioRecording() {
       if (isRecording) return;
+      if (window.jarvisDesktop && typeof window.jarvisDesktop.updateTranscriptSpeaker === 'function') {
+        try { window.jarvisDesktop.updateTranscriptSpeaker("Listening to your directive, Sir...", "system"); } catch (e) {}
+      }
       try {
         const selectedId = localStorage.getItem('jarvis_selected_mic_id');
         const constraints = {
@@ -2460,6 +2472,24 @@
       if (input) {
         input.focus();
         input.select();
+      }
+    });
+
+    // Global Stop Directive Event from Compact HUD / Desktop
+    window.addEventListener('jarvis-stop', () => {
+      console.log("🛑 Directive cancellation received from Desktop Shell!");
+      try {
+        if (typeof ttsAudio !== 'undefined' && ttsAudio) {
+          ttsAudio.pause();
+          ttsAudio.currentTime = 0;
+        }
+        if (window.speechSynthesis) {
+          window.speechSynthesis.cancel();
+        }
+        setOrbState('idle');
+        sendWS({ type: 'stop' });
+      } catch (e) {
+        console.error("Error stopping directive:", e);
       }
     });
 

@@ -129,3 +129,4 @@ if __name__ == "__main__":
     test_fastapi_vision_endpoint()
     print("\nALL SCREEN CONTEXT & CLIPBOARD HOOK TESTS PASSED CLEANLY! (OK)")
     app.quit()
+    sys.exit(0)

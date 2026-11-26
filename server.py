@@ -30,8 +30,14 @@ from backend.server import (
 
 if __name__ == "__main__":
     import uvicorn
+    import argparse
+    parser = argparse.ArgumentParser(description="J.A.R.V.I.S. Core Universal Entrypoint")
+    parser.add_argument("--port", type=int, default=int(os.getenv("PORT", "8000")), help="Port number (default: 8000 or PORT env)")
+    parser.add_argument("--host", default=os.getenv("HOST", "0.0.0.0"), help="Host address (default: 0.0.0.0)")
+    args, _ = parser.parse_known_args()
+
     print("=" * 65)
-    print("[*] 🚀 J.A.R.V.I.S. Core Launching from backend/server.py...")
-    print("[*] 👉 Open your Stark HUD at: http://localhost:8765")
+    print(f"[*] 🚀 J.A.R.V.I.S. Core Launching on port {args.port}...")
+    print(f"[*] 👉 Open your Stark HUD at: http://localhost:{args.port}")
     print("=" * 65)
-    uvicorn.run("backend.server:app", host="0.0.0.0", port=8765, log_level="info")
+    uvicorn.run("backend.server:app", host=args.host, port=args.port, log_level="info")
