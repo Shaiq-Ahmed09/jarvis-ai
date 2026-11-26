@@ -32,7 +32,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import (
     QPainter, QRadialGradient, QLinearGradient, QColor, QPen, QBrush,
-    QFont, QCursor, QKeyEvent
+    QFont, QCursor, QKeyEvent, QRegion
 )
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
@@ -103,6 +103,56 @@ def enable_windows_translucency(hwnd: int):
         data.SizeOfData = ctypes.sizeof(policy)
 
         user32.SetWindowCompositionAttribute(hwnd, ctypes.byref(data))
+    except Exception:
+        pass
+
+
+def disable_windows_translucency(hwnd: int):
+    """Disables Windows 11 DWM Acrylic / BlurBehind so no square container or blur remains when collapsed."""
+    if sys.platform != "win32":
+        return
+
+    # 1. Disable Accent Policy
+    try:
+        user32 = ctypes.windll.user32
+
+        class ACCENT_POLICY(ctypes.Structure):
+            _fields_ = [
+                ("AccentState", ctypes.c_int),
+                ("AccentFlags", ctypes.c_int),
+                ("GradientColor", ctypes.c_uint),
+                ("AnimationId", ctypes.c_int),
+            ]
+
+        class WINCOMPATTRDATA(ctypes.Structure):
+            _fields_ = [
+                ("Attribute", ctypes.c_int),
+                ("Data", ctypes.c_void_p),
+                ("SizeOfData", ctypes.c_size_t),
+            ]
+
+        policy = ACCENT_POLICY()
+        policy.AccentState = 0  # ACCENT_DISABLED
+        policy.AccentFlags = 0
+        policy.GradientColor = 0
+        policy.AnimationId = 0
+
+        data = WINCOMPATTRDATA()
+        data.Attribute = 19  # WCA_ACCENT_POLICY
+        data.Data = ctypes.cast(ctypes.byref(policy), ctypes.c_void_p)
+        data.SizeOfData = ctypes.sizeof(policy)
+
+        user32.SetWindowCompositionAttribute(hwnd, ctypes.byref(data))
+    except Exception:
+        pass
+
+    # 2. Reset DwmSetWindowAttribute system backdrop to none
+    try:
+        dwmapi = ctypes.windll.dwmapi
+        DWMWA_SYSTEMBACKDROP_TYPE = 38
+        DWMSBT_NONE = 1
+        backdrop = ctypes.c_int(DWMSBT_NONE)
+        dwmapi.DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, ctypes.byref(backdrop), ctypes.sizeof(backdrop))
     except Exception:
         pass
 
@@ -248,7 +298,9 @@ class DesktopAIBubble(QWidget):
             | Qt.Tool
         )
         self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WA_NoSystemBackground, True)
         self.setAttribute(Qt.WA_ShowWithoutActivating, False)
+        self.setStyleSheet("background: transparent;")
         self.setMouseTracking(True)
 
         # Build UI layout (Glassmorphic card container)
@@ -455,6 +507,18 @@ class DesktopAIBubble(QWidget):
         self.main_layout.addWidget(self.card)
         self.card.hide()  # Collapsed initially
 
+    def _update_mask(self):
+        """Enforces a pure circular window mask when collapsed, and clears it when expanded."""
+        if not self.is_expanded:
+            # Elliptical mask clips any opaque container or window background to a pure circle
+            self.setMask(QRegion(0, 0, self.width(), self.height(), QRegion.Ellipse))
+        else:
+            self.clearMask()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._update_mask()
+
     def reset_to_default_position(self):
         """Anchors the 96x96 bubble 24px away from bottom-right of primary screen."""
         screen = QApplication.primaryScreen().availableGeometry()
@@ -462,6 +526,7 @@ class DesktopAIBubble(QWidget):
         by = screen.bottom() - 96 - 48
         self.setGeometry(bx, by, 96, 96)
         self._dock_side = "right"
+        self._update_mask()
 
     # -------------------------------------------------------------------------
     # 60 FPS Physics & Render Loop
@@ -506,6 +571,11 @@ class DesktopAIBubble(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
+
+        # Clear backing store completely to transparent so zero opaque container appears
+        painter.setCompositionMode(QPainter.CompositionMode_Clear)
+        painter.fillRect(self.rect(), Qt.transparent)
+        painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
 
         cx, cy = 48.0, 48.0
         breath = math.sin(self._breath_phase)  # -1.0 to +1.0
@@ -800,7 +870,8 @@ class DesktopAIBubble(QWidget):
         self.geom_anim.setEndValue(QRect(target_x, target_y, target_w, target_h))
         self.geom_anim.start()
 
-        # Engage Windows 11 DWM Blur & Acrylic Translucency
+        # Clear mask for expanded card layout and engage Windows 11 DWM Blur & Acrylic
+        self.clearMask()
         try:
             enable_windows_translucency(int(self.winId()))
         except Exception:
@@ -817,6 +888,13 @@ class DesktopAIBubble(QWidget):
 
         self.is_expanded = False
         self.card.hide()
+
+        # Disable Acrylic/BlurBehind immediately so no square backdrop remains on screen
+        try:
+            disable_windows_translucency(int(self.winId()))
+        except Exception:
+            pass
+        self._update_mask()
 
         cur_x, cur_y = self.x(), self.y()
         cur_w, cur_h = self.width(), self.height()
@@ -837,10 +915,12 @@ class DesktopAIBubble(QWidget):
 
     def _on_anim_finished(self):
         if self.is_expanded:
+            self.clearMask()
             self.card.show()
             self.input_field.setFocus()
         else:
             self.card.hide()
+            self._update_mask()
             self.update()
 
     # -------------------------------------------------------------------------
