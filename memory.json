@@ -1,4 +1,10 @@
 [
+  "[CLIPBOARD TEXT]: Add a Compact Voice HUD Mode and Windows startup setup for my Jarvis desktop bubble:  Add a toggle in the popup header t",
+  "[CLIPBOARD CODE]: Add native Windows screen-context capabilities to JarvisBridge (QWebChannel) and wire them into the Jarvis web app:  Add",
+  "[CLIPBOARD CODE]: Add low-CPU background wake-word detection to the Python PySide6 desktop wrapper so saying \"Hey Jarvis\" wakes the bubble",
+  "[CLIPBOARD CODE]: Connect my existing Jarvis Web App and FastAPI backend with my PySide6 floating desktop AI bubble so that clicking the b",
+  "[CLIPBOARD TEXT]: Upgrade the bubble_ui.py visual design and animations in my PySide6 Jarvis desktop overlay to look like a high-end sci-f",
+  "[CLIPBOARD TEXT]: Build a pure Python Windows 11 floating desktop AI bubble overlay using PySide6 and global-hotkeys that connects to my e",
   "[CLIPBOARD TEXT]: add some more instagram system prompts and they are: \"When asked are you ai or is it ai who is talking to me? reply with",
   "[CLIPBOARD TEXT]: okay and whenever she replies just stick with english kind of use short forms and normal english with little or less hin",
   "[CLIPBOARD TEXT]: clean the whole directory and make folders for backend, frontend, like that and run it",

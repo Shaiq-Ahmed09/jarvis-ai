@@ -347,6 +347,14 @@ class DesktopAIBubble(QWidget):
         top_bar.addWidget(self.status_pill)
         top_bar.addStretch()
 
+        # Open Full Web HUD Button
+        self.btn_hud = QPushButton("🌐")
+        self.btn_hud.setObjectName("btnHUD")
+        self.btn_hud.setToolTip("Open Full Stark HUD & Telemetry (http://localhost:8765)")
+        self.btn_hud.setFixedSize(28, 28)
+        self.btn_hud.setCursor(Qt.PointingHandCursor)
+        self.btn_hud.clicked.connect(self._open_web_hud)
+
         # Mic Toggle Button
         self.btn_mic = QPushButton("🎙️")
         self.btn_mic.setObjectName("btnMic")
@@ -364,7 +372,7 @@ class DesktopAIBubble(QWidget):
         self.btn_min.clicked.connect(self.collapse_bubble)
 
         self.card.setStyleSheet(self.card.styleSheet() + """
-            QPushButton#btnMic, QPushButton#btnMinimize {
+            QPushButton#btnMic, QPushButton#btnMinimize, QPushButton#btnHUD {
                 background: rgba(15, 23, 42, 0.7);
                 border: 1px solid rgba(0, 240, 255, 0.25);
                 border-radius: 14px;
@@ -372,12 +380,13 @@ class DesktopAIBubble(QWidget):
                 font-size: 11px;
                 font-weight: bold;
             }
-            QPushButton#btnMic:hover, QPushButton#btnMinimize:hover {
+            QPushButton#btnMic:hover, QPushButton#btnMinimize:hover, QPushButton#btnHUD:hover {
                 background: rgba(0, 240, 255, 0.22);
                 border-color: #00f0ff;
             }
         """)
 
+        top_bar.addWidget(self.btn_hud)
         top_bar.addWidget(self.btn_mic)
         top_bar.addWidget(self.btn_min)
         card_layout.addLayout(top_bar)
@@ -696,6 +705,36 @@ class DesktopAIBubble(QWidget):
                 self.toggle_expand()
             self._is_dragging = False
             event.accept()
+
+    def mouseDoubleClickEvent(self, event):
+        if not self.is_expanded:
+            self._open_web_hud()
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
+
+    def _open_web_hud(self):
+        """Restores or opens the full Stark HUD web interface at http://localhost:8765."""
+        import webbrowser
+        try:
+            import win32gui, win32process, win32con, psutil
+            def restore_cb(hwnd, _):
+                if win32gui.IsWindow(hwnd):
+                    _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                    try:
+                        pname = psutil.Process(pid).name().lower()
+                        title = win32gui.GetWindowText(hwnd).lower()
+                        if any(b in pname for b in ["brave", "chrome", "msedge", "firefox", "opera"]):
+                            if any(k in title for k in ["jarvis", "localhost", "8765"]):
+                                win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                                win32gui.SetForegroundWindow(hwnd)
+                    except Exception:
+                        pass
+                return True
+            win32gui.EnumWindows(restore_cb, None)
+        except Exception:
+            pass
+        webbrowser.open("http://localhost:8765")
 
     def _perform_magnetic_snap(self):
         """Snaps 24px away from nearest left or right screen edge with OutCubic physics."""

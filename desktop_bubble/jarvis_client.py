@@ -27,37 +27,47 @@ class ChatWorker(QThread):
         self.prompt = prompt
 
     def run(self):
-        url = f"{self.base_url}/chat"
         payload = {"message": self.prompt}
-        try:
-            with httpx.Client(timeout=30.0) as client:
-                resp = client.post(url, json=payload)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    # Support multiple common response schemas
-                    if isinstance(data, dict):
-                        reply = (
-                            data.get("response")
-                            or data.get("reply")
-                            or data.get("text")
-                            or data.get("message")
-                            or json.dumps(data, indent=2)
-                        )
+        candidates = [self.base_url, "http://localhost:8765", "http://localhost:8000"]
+        clean_urls = []
+        for u in candidates:
+            u_clean = u.rstrip("/")
+            if u_clean not in clean_urls:
+                clean_urls.append(u_clean)
+
+        last_err = None
+        for base in clean_urls:
+            url = f"{base}/chat"
+            try:
+                with httpx.Client(timeout=30.0) as client:
+                    resp = client.post(url, json=payload)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        if isinstance(data, dict):
+                            reply = (
+                                data.get("response")
+                                or data.get("reply")
+                                or data.get("text")
+                                or data.get("message")
+                                or json.dumps(data, indent=2)
+                            )
+                        else:
+                            reply = str(data)
+                        self.response_received.emit(reply)
+                        return
                     else:
-                        reply = str(data)
-                    self.response_received.emit(reply)
-                else:
-                    self.error_occurred.emit(
-                        f"Server returned HTTP {resp.status_code}: {resp.text[:120]}"
-                    )
-        except httpx.ConnectError:
-            self.error_occurred.emit(
-                f"Cannot connect to Jarvis backend at {self.base_url}. Ensure server is running."
-            )
-        except httpx.TimeoutException:
-            self.error_occurred.emit("Jarvis response timed out (30s). Please try again.")
-        except Exception as e:
-            self.error_occurred.emit(f"Unexpected error: {str(e)}")
+                        last_err = f"Server returned HTTP {resp.status_code}: {resp.text[:120]}"
+            except httpx.ConnectError:
+                last_err = f"Cannot connect to Jarvis backend at {base}. Ensure server is running."
+                continue
+            except httpx.TimeoutException:
+                self.error_occurred.emit("Jarvis response timed out (30s). Please try again.")
+                return
+            except Exception as e:
+                self.error_occurred.emit(f"Unexpected error: {str(e)}")
+                return
+
+        self.error_occurred.emit(last_err or f"Cannot connect to Jarvis backend at {self.base_url}.")
 
 
 class HealthWorker(QThread):
@@ -82,19 +92,23 @@ class HealthWorker(QThread):
                 self.msleep(100)
 
     def _ping(self) -> bool:
-        test_urls = [
-            f"{self.base_url}/",
-            f"{self.base_url}/health",
-            f"{self.base_url}/docs",
-        ]
-        for url in test_urls:
-            try:
-                with httpx.Client(timeout=1.5) as client:
-                    resp = client.get(url)
-                    if resp.status_code in (200, 404):
-                        return True
-            except Exception:
-                continue
+        candidates = [self.base_url, "http://localhost:8765", "http://localhost:8000"]
+        for base in candidates:
+            base = base.rstrip("/")
+            test_urls = [
+                f"{base}/",
+                f"{base}/health",
+                f"{base}/docs",
+            ]
+            for url in test_urls:
+                try:
+                    with httpx.Client(timeout=1.2) as client:
+                        resp = client.get(url)
+                        if resp.status_code in (200, 404):
+                            self.base_url = base
+                            return True
+                except Exception:
+                    continue
         return False
 
     def stop(self):

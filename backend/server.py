@@ -1451,10 +1451,10 @@ class JarvisSession:
                 "code": "code",
                 "whatsapp": "whatsapp://",
                 "whatsapp web": "https://web.whatsapp.com",
-                "overlay": f'"{sys.executable}" "{ROOT_DIR / "backend" / "overlay.py"}"',
-                "bubble": f'"{sys.executable}" "{ROOT_DIR / "backend" / "overlay.py"}"',
-                "floating bubble": f'"{sys.executable}" "{ROOT_DIR / "backend" / "overlay.py"}"',
-                "desktop bubble": f'"{sys.executable}" "{ROOT_DIR / "backend" / "overlay.py"}"',
+                "overlay": f'"{sys.executable}" "{ROOT_DIR / "desktop_bubble" / "main.py"}"',
+                "bubble": f'"{sys.executable}" "{ROOT_DIR / "desktop_bubble" / "main.py"}"',
+                "floating bubble": f'"{sys.executable}" "{ROOT_DIR / "desktop_bubble" / "main.py"}"',
+                "desktop bubble": f'"{sys.executable}" "{ROOT_DIR / "desktop_bubble" / "main.py"}"',
                 "gmail": "https://mail.google.com/mail/u/0/#inbox",
                 "youtube": "https://www.youtube.com",
                 "google": "https://www.google.com",
@@ -2753,12 +2753,22 @@ def minimize_browser_window():
 def launch_desktop_bubble(minimize_browser: bool = False) -> bool:
     global _desktop_bubble_proc
     try:
-        # Check if overlay is already alive and running
-        already_running = False
+        # 1. Terminate any legacy overlay.py processes
         for p in psutil.process_iter(['pid', 'cmdline']):
             try:
                 cmd = p.info.get('cmdline') or []
                 if any('overlay.py' in arg for arg in cmd):
+                    p.terminate()
+            except Exception:
+                pass
+
+        # 2. Check if PySide6 desktop_bubble is already running
+        already_running = False
+        for p in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                cmd = p.info.get('cmdline') or []
+                pname = (p.info.get('name') or '').lower()
+                if 'python' in pname and any('desktop_bubble' in arg for arg in cmd):
                     already_running = True
                     break
             except Exception:
@@ -2766,10 +2776,10 @@ def launch_desktop_bubble(minimize_browser: bool = False) -> bool:
 
         if not already_running:
             python_exe = sys.executable
-            script = str(ROOT_DIR / "backend" / "overlay.py")
+            script = str(ROOT_DIR / "desktop_bubble" / "main.py")
             si = subprocess.STARTUPINFO()
             si.lpDesktop = r"WinSta0\Default"
-            _desktop_bubble_proc = subprocess.Popen([python_exe, script], startupinfo=si)
+            _desktop_bubble_proc = subprocess.Popen([python_exe, script, "--url", "http://localhost:8765"], startupinfo=si)
 
         if minimize_browser:
             minimize_browser_window()
@@ -2785,7 +2795,7 @@ def stop_desktop_bubble() -> bool:
     for p in psutil.process_iter(['pid', 'cmdline']):
         try:
             cmd = p.info.get('cmdline') or []
-            if any('overlay.py' in arg for arg in cmd):
+            if any('desktop_bubble' in arg or 'overlay.py' in arg for arg in cmd):
                 p.terminate()
                 killed = True
         except Exception:
@@ -2818,7 +2828,7 @@ async def api_post_chat(req: ChatMessageRequest):
         prompt_str = system_prompt(user_text)
         resp = await asyncio.to_thread(
             genai_client.models.generate_content,
-            model="gemini-2.5-flash",
+            model=MODEL,
             contents=[prompt_str, f"User: {user_text}"],
             config=types.GenerateContentConfig(max_output_tokens=500, temperature=0.7)
         )

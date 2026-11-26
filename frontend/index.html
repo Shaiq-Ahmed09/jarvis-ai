@@ -92,6 +92,63 @@
       pointer-events: auto;
     }
 
+    /* Desktop Sentinel Hub Card (Replacing redundant web bubble) */
+    .ai-bubble-nexus {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      padding: 16px 32px;
+      background: rgba(8, 16, 32, 0.78);
+      border: 1px solid rgba(0, 240, 255, 0.4);
+      border-radius: 40px;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 0 35px rgba(0, 240, 255, 0.16), inset 0 0 16px rgba(0, 240, 255, 0.08);
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .ai-bubble-nexus:hover {
+      transform: translateY(-3px) scale(1.03);
+      border-color: var(--cyan);
+      box-shadow: 0 0 50px var(--cyan-glow), inset 0 0 24px rgba(0, 240, 255, 0.22);
+    }
+
+    .nexus-badge {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .nexus-pulse {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #00f0ff;
+      box-shadow: 0 0 12px #00f0ff;
+      animation: nexusPulse 1.8s infinite;
+    }
+
+    @keyframes nexusPulse {
+      0% { transform: scale(0.9); opacity: 0.6; }
+      50% { transform: scale(1.35); opacity: 1; box-shadow: 0 0 20px #00f0ff; }
+      100% { transform: scale(0.9); opacity: 0.6; }
+    }
+
+    .nexus-label {
+      font-family: 'Consolas', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      color: #00f0ff;
+    }
+
+    .nexus-hint {
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+    }
+
     /* The Floating Arc Orb */
     .ai-bubble {
       width: 140px;
@@ -913,8 +970,8 @@
 
   <!-- Top Navigation (Subtle Floating Action & Settings) -->
   <header id="top-nav">
-    <button class="action-pill-btn" id="btn-min-to-desktop" onclick="triggerDesktopBubble()" title="Minimize Web App & Activate Floating Desktop Bubble" style="border-color: var(--cyan); color: var(--cyan); font-weight: 600; cursor: pointer;">
-      <span>🔮</span> Minimize to Desktop Bubble
+    <button class="action-pill-btn" id="btn-min-to-desktop" onclick="triggerDesktopBubble(true)" title="Minimize Web App & Activate Floating Desktop Bubble (Alt + Space)" style="border-color: var(--cyan); color: var(--cyan); font-weight: 600; cursor: pointer;">
+      <span>🔮</span> Float Desktop Bubble (Alt + Space)
     </button>
     <button class="settings-btn" id="btn-open-settings" title="Open Settings & Protocols">
       ⚙️
@@ -926,14 +983,13 @@
 
   <!-- Central Floating AI Bubble & Typing Bar Island -->
   <div id="bubble-dock">
-    <!-- Floating Arc Orb Bubble -->
-    <div class="ai-bubble" id="ai-bubble" title="Click to speak with J.A.R.V.I.S.">
-      <div class="bubble-ring-outer"></div>
-      <div class="bubble-ring-mid"></div>
-      <div class="bubble-core">
-        <div class="bubble-emblem"></div>
+    <!-- Central Desktop Sentinel Hub (Replaces redundant web app bubble) -->
+    <div class="ai-bubble-nexus" id="ai-bubble" onclick="triggerDesktopBubble(true)" title="Summon Floating Desktop AI Bubble (Alt + Space) — Click to Float on Desktop">
+      <div class="nexus-badge">
+        <span class="nexus-pulse"></span>
+        <span class="nexus-label">DESKTOP SENTINEL ACTIVE // ALT + SPACE</span>
       </div>
-      <div class="acoustic-ring"></div>
+      <div class="nexus-hint">Click anywhere to float companion bubble onto Windows desktop</div>
     </div>
 
     <!-- Live Status Label -->
@@ -1698,6 +1754,11 @@
 
     window.addEventListener('blur', () => {
       window.triggerDesktopBubble(false);
+    });
+
+    // Auto-launch Desktop Sentinel Overlay on initial web app load
+    window.addEventListener('load', () => {
+      setTimeout(() => window.triggerDesktopBubble(false), 800);
     });
 
     // Auto-focus typing bar on keypress
