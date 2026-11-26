@@ -48,6 +48,7 @@ from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile
 from PySide6.QtWebChannel import QWebChannel
 
 from jarvis_client import JarvisClient
+from wake_word import WakeWordWorker
 
 # Windows Default Desktop Attach for reliable monitor mapping
 try:
@@ -164,11 +165,13 @@ class JarvisBridge(QObject):
     """
     Two-way communication bridge exposed to JavaScript via QWebChannel as `window.jarvisDesktop`.
     Allows the web app to control the floating orb's visual state and audio reactivity,
-    and request collapsing/minimizing.
+    sync the selected microphone hardware, handle wake-word activation, and request collapsing/minimizing.
     """
     orbStateChanged = Signal(str)
     audioLevelChanged = Signal(float)
     minimizeRequested = Signal()
+    micDeviceChanged = Signal(str, str)
+    wakeTriggered = Signal(str)
 
     @Slot(str)
     def setOrbState(self, state: str):
@@ -184,6 +187,11 @@ class JarvisBridge(QObject):
     def minimizeToBubble(self):
         """Allows JavaScript to request collapsing back to the 96x96 floating orb."""
         self.minimizeRequested.emit()
+
+    @Slot(str, str)
+    def setMicDevice(self, label: str, device_id: str):
+        """Allows JavaScript to notify Python of the user's selected microphone hardware."""
+        self.micDeviceChanged.emit(str(label), str(device_id))
 
 
 class JarvisWebEnginePage(QWebEnginePage):
@@ -353,6 +361,12 @@ class DesktopAIBubble(QWidget):
         self.setAttribute(Qt.WA_ShowWithoutActivating, False)
         self.setStyleSheet("background: transparent;")
         self.setMouseTracking(True)
+
+        # Low-CPU Background Wake-Word Engine (sounddevice + openwakeword)
+        self.wake_worker = WakeWordWorker()
+        self.wake_worker.audio_level.connect(self._on_wake_audio_level)
+        self.wake_worker.wake_detected.connect(self._on_wake_word_triggered)
+        self.wake_worker.start()
 
         # Build UI layout (Glassmorphic card container with embedded QWebEngineView)
         self._build_ui()
@@ -563,6 +577,8 @@ class DesktopAIBubble(QWidget):
         self.bridge.orbStateChanged.connect(self.set_state)
         self.bridge.audioLevelChanged.connect(self.set_audio_level)
         self.bridge.minimizeRequested.connect(self.collapse_bubble)
+        if hasattr(self, "wake_worker"):
+            self.bridge.micDeviceChanged.connect(self.wake_worker.set_microphone)
         self.channel.registerObject("jarvisDesktop", self.bridge)
         self.web_page.setWebChannel(self.channel)
 
@@ -1035,6 +1051,25 @@ class DesktopAIBubble(QWidget):
                 }
             """)
 
+    def _on_wake_audio_level(self, level: float):
+        """Streams live mic RMS level to orb so the floating bubble pulses with voice."""
+        if not self.is_expanded or self.state in ("idle", "listening"):
+            self.set_audio_level(level)
+
+    def _on_wake_word_triggered(self, phrase: str):
+        """Triggered when background wake-word engine detects 'Hey Jarvis'."""
+        print(f"[DesktopAIBubble] Wake word '{phrase}' detected! Expanding popup & listening...")
+        self.expand_popup()
+        self.set_state("listening")
+        if hasattr(self, "bridge"):
+            self.bridge.wakeTriggered.emit(phrase)
+        if hasattr(self, "web_view") and self.web_view.page():
+            self.web_view.page().runJavaScript(
+                f'window.dispatchEvent(new CustomEvent("jarvis-wake-activate", {{ detail: {{ phrase: "{phrase}" }} }}));'
+            )
+
     def closeEvent(self, event):
+        if hasattr(self, "wake_worker"):
+            self.wake_worker.stop()
         self.client.shutdown()
         super().closeEvent(event)

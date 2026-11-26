@@ -1912,6 +1912,13 @@
           select.appendChild(opt);
         });
 
+        // Sync microphone selection with desktop wake-word detector
+        const activeOpt = select.options[select.selectedIndex];
+        const activeLabel = activeOpt ? activeOpt.textContent : "";
+        if (window.jarvisDesktop && typeof window.jarvisDesktop.setMicDevice === 'function') {
+          try { window.jarvisDesktop.setMicDevice(activeLabel, selectedMicId || ""); } catch (e) {}
+        }
+
         addDrawerLog(`Audio devices scanned: ${audioInputs.length} input(s) available.`);
       } catch (err) {
         console.error('Error enumerating audio inputs:', err);
@@ -1931,7 +1938,12 @@
       $('#mic-select').onchange = e => {
         selectedMicId = e.target.value;
         localStorage.setItem('jarvis_selected_mic_id', selectedMicId);
-        addDrawerLog(`Microphone configured: ${selectedMicId ? 'Specific Device' : 'System Default'}`);
+        const opt = e.target.options[e.target.selectedIndex];
+        const micLabel = opt ? opt.textContent : "";
+        addDrawerLog(`Microphone configured: ${selectedMicId ? micLabel : 'System Default'}`);
+        if (window.jarvisDesktop && typeof window.jarvisDesktop.setMicDevice === 'function') {
+          try { window.jarvisDesktop.setMicDevice(micLabel, selectedMicId); } catch (err) {}
+        }
         if (isTestingMic) {
           stopMicTest();
           startMicTest();
@@ -2037,6 +2049,26 @@
     // =========================================================================
     // QWEBCHANNEL TWO-WAY DESKTOP SHELL BRIDGE
     // =========================================================================
+    function handleWakeWordActivation(phrase) {
+      console.log("⚡ Wake word triggered:", phrase);
+      addDrawerLog(`Wake word detected ('${phrase}'). Initializing voice capture...`);
+      setOrbState('listening');
+      const input = $('#user-input');
+      if (input) {
+        input.focus();
+        input.placeholder = "Listening for command, Sir...";
+      }
+      if (!isRecording) {
+        startAudioRecording();
+      }
+    }
+
+    // Wake-Word Activation Event from Desktop Wrapper
+    window.addEventListener('jarvis-wake-activate', e => {
+      const phrase = (e.detail && e.detail.phrase) ? e.detail.phrase : 'hey_jarvis';
+      handleWakeWordActivation(phrase);
+    });
+
     function initQWebChannel() {
       if (typeof QWebChannel !== 'undefined' && window.qt && window.qt.webChannelTransport) {
         new QWebChannel(window.qt.webChannelTransport, function(channel) {
@@ -2044,6 +2076,21 @@
           console.log("✅ QWebChannel connected to Python JarvisBridge!");
           if (window.currentOrbState && typeof window.jarvisDesktop.setOrbState === 'function') {
             window.jarvisDesktop.setOrbState(window.currentOrbState);
+          }
+          // Sync current microphone to Python wake-word detector
+          const select = $('#mic-select');
+          if (select) {
+            const opt = select.options[select.selectedIndex];
+            const label = opt ? opt.textContent : "";
+            if (typeof window.jarvisDesktop.setMicDevice === 'function') {
+              try { window.jarvisDesktop.setMicDevice(label, selectedMicId || ""); } catch (e) {}
+            }
+          }
+          // Connect to wakeTriggered signal
+          if (window.jarvisDesktop.wakeTriggered && typeof window.jarvisDesktop.wakeTriggered.connect === 'function') {
+            window.jarvisDesktop.wakeTriggered.connect(function(phrase) {
+              handleWakeWordActivation(phrase);
+            });
           }
         });
       }
