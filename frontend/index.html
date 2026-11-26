@@ -76,9 +76,9 @@
        ========================================================================= */
     #bubble-dock {
       position: absolute;
-      bottom: 48px;
+      top: 50%;
       left: 50%;
-      transform: translateX(-50%);
+      transform: translate(-50%, -50%);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -94,31 +94,41 @@
 
     /* The Floating Arc Orb */
     .ai-bubble {
-      width: 120px;
-      height: 120px;
+      width: 140px;
+      height: 140px;
       border-radius: 50%;
       position: relative;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      filter: drop-shadow(0 0 30px var(--cyan-glow));
-      animation: levitate 4s ease-in-out infinite;
+      filter: drop-shadow(0 0 35px var(--cyan-glow));
+      animation: breathingOrb 3.6s ease-in-out infinite alternate;
       transition: transform 0.3s ease, filter 0.3s ease;
     }
 
     .ai-bubble:hover {
-      transform: scale(1.06);
-      filter: drop-shadow(0 0 45px var(--cyan-glow));
+      transform: scale(1.1);
+      filter: drop-shadow(0 0 60px var(--cyan));
     }
 
     .ai-bubble:active {
-      transform: scale(0.96);
+      transform: scale(0.94);
     }
 
-    @keyframes levitate {
-      0%, 100% { transform: translateY(0px); }
-      50% { transform: translateY(-10px); }
+    @keyframes breathingOrb {
+      0% {
+        transform: scale(0.92);
+        filter: drop-shadow(0 0 25px rgba(0, 240, 255, 0.35));
+      }
+      50% {
+        transform: scale(1.08);
+        filter: drop-shadow(0 0 55px rgba(0, 240, 255, 0.85));
+      }
+      100% {
+        transform: scale(0.95);
+        filter: drop-shadow(0 0 30px rgba(0, 240, 255, 0.45));
+      }
     }
 
     /* Outer Quantum Rings */
@@ -901,19 +911,9 @@
   <!-- Spatial Window Canvas for Pop-up Result Windows -->
   <div id="spatial-canvas"></div>
 
-  <!-- Top Navigation & Controls Pill -->
+  <!-- Top Navigation (Subtle Floating Settings Cog) -->
   <header id="top-nav">
-    <div class="nav-pill">
-      <div class="status-dot" id="conn-dot"></div>
-      <span id="conn-label">STARK CORE // ONLINE</span>
-    </div>
-    <div class="nav-pill" id="persona-badge" style="color: var(--cyan); cursor: pointer;" title="Click to toggle Persona">
-      PERSONA: <span id="persona-name">J.A.R.V.I.S.</span>
-    </div>
-    <button class="action-pill-btn" id="btn-clear-windows" title="Close all open windows">
-      <span>✕</span> Clear Windows
-    </button>
-    <button class="settings-btn" id="btn-open-settings" title="Open Settings & Telemetry">
+    <button class="settings-btn" id="btn-open-settings" title="Open Settings & Protocols">
       ⚙️
     </button>
   </header>
@@ -961,10 +961,30 @@
     </div>
 
     <div class="drawer-content">
-      <!-- Persona Mode -->
+      <!-- Desktop Floating Sentinel Bubble Launcher -->
+      <div class="drawer-section" style="background: rgba(0, 240, 255, 0.05); border-color: var(--cyan);">
+        <div class="section-title">
+          <span>🔮 DESKTOP FLOATING SENTINEL</span>
+        </div>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.5;">
+          Launch the always-on-top, movable transparent AI bubble directly onto your Windows desktop screen. It hovers over any tab or app and can see your screen.
+        </p>
+        <button class="drawer-btn" id="btn-launch-desktop-bubble" style="width: 100%; background: var(--cyan); color: #020813; font-weight: 700; font-size: 13px;">
+          🚀 Summon Floating Desktop Bubble
+        </button>
+      </div>
+
+      <!-- Persona & Core Status -->
       <div class="drawer-section">
         <div class="section-title">
-          <span>🎭 ACTIVE CHAT PERSONA</span>
+          <span>◈ SYSTEM STATUS & IDENTITY</span>
+        </div>
+        <div class="toggle-row">
+          <span>Core Link</span>
+          <div class="nav-pill" style="padding: 4px 10px; font-size: 11px;">
+            <div class="status-dot" id="conn-dot"></div>
+            <span id="conn-label">ONLINE</span>
+          </div>
         </div>
         <div class="toggle-row">
           <span>Identity Mode</span>
@@ -972,6 +992,12 @@
             <option value="jarvis">J.A.R.V.I.S. (AI Protocol)</option>
             <option value="radon">RADON (@redonxd)</option>
           </select>
+        </div>
+        <div class="toggle-row">
+          <span>Clear Open Result Windows</span>
+          <button class="action-pill-btn" id="btn-clear-windows" title="Close all open windows" style="padding: 4px 10px; font-size: 11px;">
+            ✕ Clear All
+          </button>
         </div>
       </div>
 
@@ -1605,8 +1631,8 @@
 
     // Persona UI Update
     function updatePersonaUI(persona) {
-      $('#persona-name').textContent = persona.toUpperCase();
-      $('#persona-select').value = persona;
+      if ($('#persona-name')) $('#persona-name').textContent = persona.toUpperCase();
+      if ($('#persona-select')) $('#persona-select').value = persona;
       const orb = $('#ai-bubble');
       if (persona === 'radon') {
         orb.classList.add('radon');
@@ -1617,14 +1643,34 @@
       }
     }
 
-    $('#persona-badge').onclick = () => {
-      const next = currentPersona === 'jarvis' ? 'radon' : 'jarvis';
-      sendWS({ type: 'set_chat_persona', persona: next });
-    };
+    if ($('#persona-badge')) {
+      $('#persona-badge').onclick = () => {
+        const next = currentPersona === 'jarvis' ? 'radon' : 'jarvis';
+        sendWS({ type: 'set_chat_persona', persona: next });
+      };
+    }
 
     $('#persona-select').onchange = e => {
       sendWS({ type: 'set_chat_persona', persona: e.target.value });
     };
+
+    // Desktop Floating Bubble Launcher
+    if ($('#btn-launch-desktop-bubble')) {
+      $('#btn-launch-desktop-bubble').onclick = () => {
+        sendWS({ type: 'tool', name: 'open_app', args: { target: 'floating bubble' } });
+        const btn = $('#btn-launch-desktop-bubble');
+        btn.textContent = '✅ Floating Bubble Active on Desktop!';
+        setTimeout(() => btn.textContent = '🚀 Summon Floating Desktop Bubble', 3500);
+      };
+    }
+
+    // Auto-focus typing bar on keypress
+    window.addEventListener('keydown', e => {
+      const input = $('#user-input');
+      if (document.activeElement !== input && !e.ctrlKey && !e.altKey && !e.metaKey && e.key.length === 1) {
+        input.focus();
+      }
+    });
 
     // Settings Drawer Controls
     $('#btn-open-settings').onclick = () => {

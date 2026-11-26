@@ -1,7 +1,19 @@
-"""J.A.R.V.I.S. Native Windows Floating Corner Sentinel Overlay
-Always-on-top, draggable cybernetic Stark Arc Reactor bubble.
-Connects directly to the J.A.R.V.I.S. Core WebSocket server (ws://127.0.0.1:8765/ws).
 """
+J.A.R.V.I.S. Floating Desktop Sentinel Bubble
+=============================================
+A pure, borderless, transparent floating circular AI companion that hovers on top
+of all Windows applications and desktop tabs.
+
+Features:
+- Breathing organic glowing animation (idle, listening, thinking, speaking)
+- Free draggable movement across the desktop
+- Single click: Toggle voice listening & speech interaction
+- Double click: Maximize & open the full Stark HUD frontend in browser
+- Right click: Quick menu (Vision screen analysis, persona switch, HUD launch)
+- Floating Speech Bubble: Displays transcriptions and responses right next to the orb
+- Vision ("See my screen"): Takes a screen snapshot and analyzes what you're working on
+"""
+
 import sys
 import os
 import json
@@ -9,261 +21,324 @@ import math
 import time
 import asyncio
 import threading
+import webbrowser
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox
+from pathlib import Path
+
+# Add project root to sys.path
+_HERE = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_HERE))
+sys.path.insert(0, str(_HERE / "backend"))
 
 WS_URL = "ws://127.0.0.1:8765/ws"
+HUD_URL = "http://localhost:8765"
+TRANSPARENT_KEY = "#010203"  # Color key made 100% transparent on Windows
 
-class JarvisOverlay(tk.Tk):
+
+class SpeechPill(tk.Toplevel):
+    """Floating companion pill that appears beside the bubble displaying transcripts."""
+    def __init__(self, master):
+        super().__init__(master)
+        self.overrideredirect(True)
+        self.wm_attributes("-topmost", True)
+        self.wm_attributes("-alpha", 0.92)
+        self.configure(bg="#040d1a")
+        self.withdraw()
+
+        self.frame = tk.Frame(self, bg="#040d1a", highlightbackground="#00f0ff", highlightthickness=1)
+        self.frame.pack(fill="both", expand=True)
+
+        self.title_lbl = tk.Label(
+            self.frame, text="◈ J.A.R.V.I.S.", font=("Consolas", 8, "bold"),
+            fg="#00f0ff", bg="#040d1a", anchor="w"
+        )
+        self.title_lbl.pack(fill="x", padx=10, pady=(6, 2))
+
+        self.msg_lbl = tk.Label(
+            self.frame, text="", font=("Segoe UI", 9),
+            fg="#e2e8f0", bg="#040d1a", justify="left",
+            wraplength=260, anchor="w"
+        )
+        self.msg_lbl.pack(fill="both", expand=True, padx=10, pady=(0, 6))
+
+        self._hide_timer = None
+
+    def show_message(self, title, text, duration=7000):
+        if self._hide_timer:
+            self.after_cancel(self._hide_timer)
+
+        self.title_lbl.config(text=title)
+        self.msg_lbl.config(text=text)
+
+        # Position to the left or right of master bubble
+        self.update_idletasks()
+        bubble_x = self.master.winfo_x()
+        bubble_y = self.master.winfo_y()
+        screen_w = self.winfo_screenwidth()
+
+        pill_w = max(200, min(300, len(text) * 7 + 30))
+        pill_h = max(60, min(180, (len(text) // 30 + 2) * 22 + 30))
+
+        if bubble_x + 130 + pill_w < screen_w:
+            px = bubble_x + 120
+        else:
+            px = bubble_x - pill_w - 10
+        py = max(20, bubble_y)
+
+        self.geometry(f"{pill_w}x{pill_h}+{px}+{py}")
+        self.deiconify()
+
+        self._hide_timer = self.after(duration, self.withdraw)
+
+
+class DesktopSentinelBubble(tk.Tk):
     def __init__(self):
         super().__init__()
 
-        self.title("J.A.R.V.I.S. Sentinel")
-        self.overrideredirect(True)      # Borderless frameless window
-        self.wm_attributes("-topmost", True)  # Always on top of all Windows apps
-        self.wm_attributes("-alpha", 0.94)    # Sleek cybernetic translucency
+        self.title("J.A.R.V.I.S. Bubble")
+        self.overrideredirect(True)          # Borderless & frameless
+        self.wm_attributes("-topmost", True)      # Always on top of all windows
+        self.wm_attributes("-transparentcolor", TRANSPARENT_KEY)  # Cutout transparent bg
+        self.configure(bg=TRANSPARENT_KEY)
 
-        # Geometry: 280px wide x 340px tall, positioned at bottom right corner
-        self.width = 280
-        self.height = 340
+        # Bubble Dimensions
+        self.size = 110
         screen_w = self.winfo_screenwidth()
         screen_h = self.winfo_screenheight()
-        start_x = screen_w - self.width - 24
-        start_y = screen_h - self.height - 60
-        self.geometry(f"{self.width}x{self.height}+{start_x}+{start_y}")
-        self.configure(bg="#020813")
+        start_x = screen_w - self.size - 30
+        start_y = screen_h - self.size - 100
+        self.geometry(f"{self.size}x{self.size}+{start_x}+{start_y}")
 
-        # Draggable state
-        self._drag_data = {"x": 0, "y": 0}
-        self.bind("<Button-1>", self._start_drag)
-        self.bind("<B1-Motion>", self._on_drag)
+        # Canvas for the breathing circle
+        self.canvas = tk.Canvas(
+            self, width=self.size, height=self.size,
+            bg=TRANSPARENT_KEY, highlightthickness=0
+        )
+        self.canvas.pack(fill="both", expand=True)
 
-        # Communication & state
+        # Dragging state
+        self._drag_start = {"x": 0, "y": 0, "root_x": 0, "root_y": 0}
+        self._moved = False
+
+        self.canvas.bind("<Button-1>", self._on_mouse_down)
+        self.canvas.bind("<B1-Motion>", self._on_mouse_drag)
+        self.canvas.bind("<ButtonRelease-1>", self._on_mouse_up)
+        self.canvas.bind("<Double-Button-1>", self._on_double_click)
+        self.canvas.bind("<Button-3>", self._show_context_menu)
+
+        # Context Menu
+        self.menu = tk.Menu(self, tearoff=0, bg="#040e1c", fg="#e2e8f0", activebackground="#00f0ff", activeforeground="#01040a")
+        self.menu.add_command(label="👁️  See Screen & Analyze", command=self._analyze_screen)
+        self.menu.add_command(label="🚀  Open Full Frontend (Stark HUD)", command=self._open_full_hud)
+        self.menu.add_command(label="🎙️  Toggle Voice Listening", command=self._toggle_voice)
+        self.menu.add_separator()
+        self.menu.add_command(label="🎭  Switch to Radon Persona", command=lambda: self._set_persona("radon"))
+        self.menu.add_command(label="🤖  Switch to J.A.R.V.I.S. Persona", command=lambda: self._set_persona("jarvis"))
+        self.menu.add_separator()
+        self.menu.add_command(label="✕   Close Bubble", command=self.destroy)
+
+        # Companion Speech Pill
+        self.pill = SpeechPill(self)
+
+        # State & Animation Variables
+        self.state = "idle"  # "idle", "listening", "thinking", "speaking"
+        self.persona = "jarvis"
+        self.breath_phase = 0.0
+        self.ring_angle = 0.0
+
+        # Colors
+        self.palette = {
+            "idle": {"glow": "#00f0ff", "core": "#38bdf8", "ring": "#0284c7"},
+            "listening": {"glow": "#00ff88", "core": "#4ade80", "ring": "#16a34a"},
+            "thinking": {"glow": "#c084fc", "core": "#a855f7", "ring": "#7e22ce"},
+            "speaking": {"glow": "#38bdf8", "core": "#00f0ff", "ring": "#0369a1"},
+            "radon": {"glow": "#ffaa00", "core": "#fbbf24", "ring": "#d97706"},
+        }
+
+        # WebSocket Connection
         self.ws = None
-        self.loop = None
-        self.state = "idle" # idle, listening, thinking, speaking
-        self.anim_angle = 0
-        self.pulse_phase = 0
-        self.is_compact = False
+        self.ws_loop = None
+        self._start_ws_client()
 
-        self._build_ui()
-        self._start_ws_thread()
+        # Start 60 FPS Animation Loop
         self._animate()
 
-    def _build_ui(self):
-        # Outer Glowing Frame
-        self.outer_frame = tk.Frame(self, bg="#020813", highlightbackground="#00f0ff", highlightthickness=1)
-        self.outer_frame.pack(fill="both", expand=True)
+    def _on_mouse_down(self, event):
+        self._drag_start["x"] = event.x
+        self._drag_start["y"] = event.y
+        self._drag_start["root_x"] = self.winfo_x()
+        self._drag_start["root_y"] = self.winfo_y()
+        self._moved = False
 
-        # Header Bar
-        self.header = tk.Frame(self.outer_frame, bg="#041224", height=28)
-        self.header.pack(fill="x", side="top", padx=1, pady=1)
+    def _on_mouse_drag(self, event):
+        dx = event.x - self._drag_start["x"]
+        dy = event.y - self._drag_start["y"]
+        if abs(dx) > 3 or abs(dy) > 3:
+            self._moved = True
+        new_x = self.winfo_x() + dx
+        new_y = self.winfo_y() + dy
+        self.geometry(f"+{new_x}+{new_y}")
 
-        self.title_lbl = tk.Label(
-            self.header, text="◈ J.A.R.V.I.S. // SENTINEL",
-            fg="#00f0ff", bg="#041224", font=("Consolas", 9, "bold")
-        )
-        self.title_lbl.pack(side="left", padx=8, pady=4)
-        self.title_lbl.bind("<Button-1>", self._start_drag)
-        self.title_lbl.bind("<B1-Motion>", self._on_drag)
+    def _on_mouse_up(self, event):
+        # If user simply clicked without dragging, toggle voice interaction
+        if not self._moved:
+            self._toggle_voice()
 
-        # Window Controls
-        self.btn_close = tk.Label(self.header, text="✕", fg="#ff4455", bg="#041224", font=("Consolas", 10, "bold"), cursor="hand2")
-        self.btn_close.pack(side="right", padx=6)
-        self.btn_close.bind("<Button-1>", lambda e: self.destroy())
+    def _on_double_click(self, event):
+        self._open_full_hud()
 
-        self.btn_min = tk.Label(self.header, text="−", fg="#00f0ff", bg="#041224", font=("Consolas", 12, "bold"), cursor="hand2")
-        self.btn_min.pack(side="right", padx=4)
-        self.btn_min.bind("<Button-1>", self._toggle_compact)
+    def _show_context_menu(self, event):
+        try:
+            self.menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.menu.grab_release()
 
-        # Content Body
-        self.body = tk.Frame(self.outer_frame, bg="#020813")
-        self.body.pack(fill="both", expand=True, padx=8, pady=6)
+    def _open_full_hud(self):
+        """Maximize and open the full frontend in default web browser."""
+        self.pill.show_message("◈ STARK HUD", "Expanding full neural workspace in browser...", duration=3000)
+        webbrowser.open(HUD_URL)
 
-        # Arc Reactor Canvas
-        self.canvas = tk.Canvas(self.body, width=90, height=90, bg="#020813", highlightthickness=0)
-        self.canvas.pack(pady=4)
+    def _analyze_screen(self):
+        """Screen Vision: Captures screen and asks Jarvis to analyze active window."""
+        self.pill.show_message("◈ OPTICAL SENSORS", "Scanning desktop and active window...", duration=4000)
+        self.state = "thinking"
+        # Dispatch query to websocket
+        self._send_ws({"type": "text", "text": "Look at my screen and tell me what is open and what you observe"})
 
-        # Speech HUD Status Pill
-        self.hud_lbl = tk.Label(
-            self.body, text="🟢 ATTENTIVE // SAY 'JARVIS'",
-            fg="#00ff88", bg="#04181a", font=("Consolas", 8, "bold"),
-            padx=6, pady=3, relief="groove", borderwidth=1
-        )
-        self.hud_lbl.pack(fill="x", pady=4)
-
-        # Transcript / Response Bubble Box
-        self.msg_box = tk.Label(
-            self.body, text="J.A.R.V.I.S. is vigilant.\nAttentive across all apps, Sir.",
-            fg="#cfd8dc", bg="#031020", font=("Segoe UI", 9),
-            wraplength=250, justify="left", padx=8, pady=6,
-            relief="sunken", borderwidth=1, anchor="nw", height=4
-        )
-        self.msg_box.pack(fill="both", expand=True, pady=4)
-
-        # Input & Transmit Bar
-        self.input_frame = tk.Frame(self.body, bg="#020813")
-        self.input_frame.pack(fill="x", pady=2)
-
-        self.cmd_entry = tk.Entry(
-            self.input_frame, bg="#041224", fg="#ffffff", insertbackground="#00f0ff",
-            font=("Segoe UI", 9), relief="flat", highlightbackground="#00f0ff", highlightthickness=1
-        )
-        self.cmd_entry.pack(side="left", fill="x", expand=True, padx=(0, 4), ipady=3)
-        self.cmd_entry.bind("<Return>", self._send_text_command)
-
-        self.btn_send = tk.Button(
-            self.input_frame, text="SEND", bg="#00f0ff", fg="#020813",
-            font=("Consolas", 8, "bold"), relief="flat", cursor="hand2",
-            command=self._send_text_command
-        )
-        self.btn_send.pack(side="right")
-
-    def _start_drag(self, event):
-        self._drag_data["x"] = event.x
-        self._drag_data["y"] = event.y
-
-    def _on_drag(self, event):
-        dx = event.x - self._drag_data["x"]
-        dy = event.y - self._drag_data["y"]
-        x = self.winfo_x() + dx
-        y = self.winfo_y() + dy
-        self.geometry(f"+{x}+{y}")
-
-    def _toggle_compact(self, event=None):
-        self.is_compact = not self.is_compact
-        if self.is_compact:
-            self.body.pack_forget()
-            self.geometry(f"{self.width}x32")
-            self.btn_min.config(text="+")
+    def _toggle_voice(self):
+        """Toggle speech listening state."""
+        if self.state == "listening":
+            self.state = "thinking"
+            self.pill.show_message("◈ AUDIO MATRIX", "Processing verbal input...", duration=2500)
         else:
-            self.geometry(f"{self.width}x{self.height}")
-            self.body.pack(fill="both", expand=True, padx=8, pady=6)
-            self.btn_min.config(text="−")
+            self.state = "listening"
+            self.pill.show_message("◈ AUDIO MATRIX", "Listening... Speak your command, Sir.", duration=5000)
+
+    def _set_persona(self, mode):
+        self.persona = mode
+        self._send_ws({"type": "set_chat_persona", "persona": mode})
+        self.pill.show_message("◈ PERSONA MATRIX", f"Active Persona set to: {mode.upper()}", duration=3000)
+
+    def _send_ws(self, payload):
+        if self.ws_loop and self.ws:
+            asyncio.run_coroutine_threadsafe(self._async_send(payload), self.ws_loop)
+
+    async def _async_send(self, payload):
+        try:
+            if self.ws:
+                await self.ws.send(json.dumps(payload))
+        except Exception as e:
+            print(f"WS send error: {e}")
+
+    def _start_ws_client(self):
+        def run_loop():
+            self.ws_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self.ws_loop)
+            self.ws_loop.run_until_complete(self._ws_handler())
+
+        threading.Thread(target=run_loop, daemon=True).start()
+
+    async def _ws_handler(self):
+        import websockets
+        while True:
+            try:
+                async with websockets.connect(WS_URL) as websocket:
+                    self.ws = websocket
+                    self.after(0, lambda: self.pill.show_message("◈ J.A.R.V.I.S.", "Sentinel Bubble Connected // Online", 3000))
+                    while True:
+                        raw = await websocket.recv()
+                        msg = json.loads(raw)
+                        self.after(0, self._process_ws_msg, msg)
+            except Exception as e:
+                self.ws = None
+                await asyncio.sleep(3)
+
+    def _process_ws_msg(self, msg):
+        mtype = msg.get("type")
+        if mtype in ("say", "say_text"):
+            text = msg.get("text", "")
+            self.state = "speaking"
+            self.pill.show_message("◈ J.A.R.V.I.S.", text, duration=8000)
+            self.after(5000, lambda: setattr(self, "state", "idle"))
+        elif mtype == "user_heard":
+            text = msg.get("text", "")
+            self.pill.show_message("◈ HEARD", f'"{text}"', duration=4000)
+        elif mtype == "state":
+            self.state = msg.get("s", "idle")
+        elif mtype == "chat_persona_update":
+            self.persona = msg.get("persona", "jarvis")
 
     def _animate(self):
-        """Draw animated rotating Arc Reactor rings & pulsing core."""
-        self.anim_angle = (self.anim_angle + 3) % 360
-        self.pulse_phase = (self.pulse_phase + 0.1) % (math.pi * 2)
-
+        """60 FPS Organic Breathing Animation."""
         self.canvas.delete("all")
-        cx, cy = 45, 45
 
-        # Colors based on state
-        if self.state == "listening":
-            ring_color = "#ffaa00"
-            core_color = "#ffe082"
-        elif self.state == "thinking":
-            ring_color = "#00f0ff"
-            core_color = "#80deea"
-        elif self.state == "speaking":
-            ring_color = "#ffb300"
-            core_color = "#ffffff"
-        else:
-            ring_color = "#00f0ff"
-            core_color = "#00f0ff"
+        cx = self.size / 2
+        cy = self.size / 2
 
-        # Outer dashed arc ring
-        r_outer = 38
-        self.canvas.create_arc(
-            cx - r_outer, cy - r_outer, cx + r_outer, cy + r_outer,
-            start=self.anim_angle, extent=120, outline=ring_color, width=2, style="arc"
-        )
-        self.canvas.create_arc(
-            cx - r_outer, cy - r_outer, cx + r_outer, cy + r_outer,
-            start=(self.anim_angle + 180) % 360, extent=120, outline=ring_color, width=2, style="arc"
-        )
+        # Breathing Physics: Sine wave calculation
+        self.breath_phase = (self.breath_phase + 0.055) % (math.pi * 2)
+        breath = math.sin(self.breath_phase)  # -1.0 to +1.0
 
-        # Counter-rotating inner ring
-        r_inner = 26
-        inner_angle = (360 - self.anim_angle * 1.5) % 360
-        self.canvas.create_arc(
-            cx - r_inner, cy - r_inner, cx + r_inner, cy + r_inner,
-            start=inner_angle, extent=90, outline=ring_color, width=1.5, style="arc"
-        )
-        self.canvas.create_arc(
-            cx - r_inner, cy - r_inner, cx + r_inner, cy + r_inner,
-            start=(inner_angle + 180) % 360, extent=90, outline=ring_color, width=1.5, style="arc"
-        )
+        self.ring_angle = (self.ring_angle + (3.5 if self.state == "thinking" else 1.2)) % 360
 
-        # Pulsing Core
-        pulse_val = 14 + math.sin(self.pulse_phase) * 3
+        # Select color palette based on persona and state
+        current_palette = self.palette.get("radon" if self.persona == "radon" else self.state, self.palette["idle"])
+        glow_color = current_palette["glow"]
+        core_color = current_palette["core"]
+        ring_color = current_palette["ring"]
+
+        # 1. Outer Soft Breathing Aura Halo
+        halo_radius = 42 + breath * 4.5
         self.canvas.create_oval(
-            cx - pulse_val, cy - pulse_val, cx + pulse_val, cy + pulse_val,
-            fill=core_color, outline="#ffffff", width=1
+            cx - halo_radius, cy - halo_radius,
+            cx + halo_radius, cy + halo_radius,
+            fill="", outline=glow_color, width=1.5
         )
 
-        self.after(45, self._animate)
+        # 2. Secondary Pulsing Glow Disc
+        disc_radius = 35 + breath * 3.0
+        self.canvas.create_oval(
+            cx - disc_radius, cy - disc_radius,
+            cx + disc_radius, cy + disc_radius,
+            fill="#031024", outline=ring_color, width=2.0
+        )
 
-    def _start_ws_thread(self):
-        t = threading.Thread(target=self._ws_worker, daemon=True)
-        t.start()
+        # 3. Rotating Cybernetic Segmented Arc Ring
+        arc_radius = 31 + breath * 1.5
+        for offset in (0, 120, 240):
+            start = (self.ring_angle + offset) % 360
+            self.canvas.create_arc(
+                cx - arc_radius, cy - arc_radius,
+                cx + arc_radius, cy + arc_radius,
+                start=start, extent=55,
+                style="arc", outline=glow_color, width=2.5
+            )
 
-    def _ws_worker(self):
-        import websockets
-        async def run():
-            while True:
-                try:
-                    async with websockets.connect(WS_URL) as ws:
-                        self.ws = ws
-                        self.after(0, lambda: self.hud_lbl.config(
-                            text="🟢 ATTENTIVE // SAY 'JARVIS'", fg="#00ff88", bg="#04181a"
-                        ))
-                        async for msg in ws:
-                            data = json.loads(msg)
-                            self._handle_ws_msg(data)
-                except Exception as e:
-                    self.ws = None
-                    self.after(0, lambda: self.hud_lbl.config(
-                        text="⚠️ LINK RECONNECTING...", fg="#ffaa00", bg="#1a1402"
-                    ))
-                    await asyncio.sleep(2)
+        # 4. Inner Breathing Arc Reactor Core
+        core_radius = 21 + breath * 2.2
+        self.canvas.create_oval(
+            cx - core_radius, cy - core_radius,
+            cx + core_radius, cy + core_radius,
+            fill=core_color, outline="#ffffff", width=1.5
+        )
 
-        self.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.loop)
-        self.loop.run_until_complete(run())
+        # 5. Center Brilliant White Spark
+        center_r = 7 + breath * 1.0
+        self.canvas.create_oval(
+            cx - center_r, cy - center_r,
+            cx + center_r, cy + center_r,
+            fill="#ffffff", outline=""
+        )
 
-    def _handle_ws_msg(self, data):
-        mtype = data.get("type")
-        if mtype == "say_text":
-            text = data.get("text", "")
-            self.after(0, lambda: self._update_response(text))
-        elif mtype == "user_heard":
-            text = data.get("text", "")
-            self.after(0, lambda: self._update_user_text(text))
-        elif mtype == "state":
-            s = data.get("s", "idle")
-            self.after(0, lambda: self._set_state(s))
+        # Next frame in ~16ms (~60 FPS)
+        self.after(16, self._animate)
 
-    def _update_response(self, text):
-        self.state = "speaking"
-        self.msg_box.config(text=text)
-        self.hud_lbl.config(text="⚡ J.A.R.V.I.S. ONLINE", fg="#00f0ff")
 
-    def _update_user_text(self, text):
-        self.state = "thinking"
-        self.msg_box.config(text=f"Sir: {text}")
-        self.hud_lbl.config(text=f"⚡ COMMAND: \"{text[:20]}...\"", fg="#ffaa00")
+def main():
+    app = DesktopSentinelBubble()
+    app.mainloop()
 
-    def _set_state(self, s):
-        self.state = s
-        if s == "thinking":
-            self.hud_lbl.config(text="⚡ PROCESSING PROTOCOL...", fg="#00f0ff")
-        elif s == "idle":
-            self.hud_lbl.config(text="🟢 ATTENTIVE // SAY 'JARVIS'", fg="#00ff88", bg="#04181a")
-
-    def _send_text_command(self, event=None):
-        txt = self.cmd_entry.get().strip()
-        if not txt:
-            return
-        self.cmd_entry.delete(0, "end")
-        self.msg_box.config(text=f"Sir: {txt}")
-        self.hud_lbl.config(text="⚡ DISPATCHING...", fg="#00f0ff")
-
-        if self.ws and self.loop:
-            payload = json.dumps({"type": "task", "text": txt})
-            asyncio.run_coroutine_threadsafe(self.ws.send(payload), self.loop)
 
 if __name__ == "__main__":
-    app = JarvisOverlay()
-    app.mainloop()
+    main()
