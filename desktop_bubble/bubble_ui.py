@@ -24,6 +24,7 @@ Features:
 import sys
 import os
 import math
+import json
 import ctypes
 from pathlib import Path
 from dotenv import load_dotenv
@@ -49,6 +50,7 @@ from PySide6.QtWebChannel import QWebChannel
 
 from jarvis_client import JarvisClient
 from wake_word import WakeWordWorker
+from screen_capture import capture_screen_base64, send_to_vision_api
 
 # Windows Default Desktop Attach for reliable monitor mapping
 try:
@@ -165,13 +167,20 @@ class JarvisBridge(QObject):
     """
     Two-way communication bridge exposed to JavaScript via QWebChannel as `window.jarvisDesktop`.
     Allows the web app to control the floating orb's visual state and audio reactivity,
-    sync the selected microphone hardware, handle wake-word activation, and request collapsing/minimizing.
+    sync the selected microphone hardware, handle wake-word activation, screen vision,
+    clipboard context injection, and request collapsing/minimizing.
     """
     orbStateChanged = Signal(str)
     audioLevelChanged = Signal(float)
     minimizeRequested = Signal()
     micDeviceChanged = Signal(str, str)
     wakeTriggered = Signal(str)
+    screenCaptured = Signal(str)
+    clipboardActivated = Signal(str)
+
+    def __init__(self, parent_bubble=None):
+        super().__init__(parent_bubble)
+        self.bubble = parent_bubble
 
     @Slot(str)
     def setOrbState(self, state: str):
@@ -192,6 +201,42 @@ class JarvisBridge(QObject):
     def setMicDevice(self, label: str, device_id: str):
         """Allows JavaScript to notify Python of the user's selected microphone hardware."""
         self.micDeviceChanged.emit(str(label), str(device_id))
+
+    @Slot(result=str)
+    def captureActiveScreen(self) -> str:
+        """
+        Captures the primary monitor using mss / ImageGrab, resizes to max 1280px width,
+        and returns the base64 JPEG string.
+        Also automatically streams to the FastAPI multimodal/vision endpoint.
+        """
+        try:
+            b64 = capture_screen_base64(max_width=1280, quality=80)
+            self.screenCaptured.emit(b64)
+            print(f"[JarvisBridge] Screen captured successfully ({len(b64)} b64 chars).")
+            return b64
+        except Exception as e:
+            print(f"[JarvisBridge] Screen capture error: {e}")
+            return ""
+
+    @Slot(str, result=str)
+    def analyzeActiveScreen(self, query: str = "") -> str:
+        """Captures active screen and sends it to FastAPI multimodal vision endpoint."""
+        try:
+            b64 = capture_screen_base64(max_width=1280, quality=80)
+            self.screenCaptured.emit(b64)
+            target_url = self.bubble.backend_url if self.bubble else "http://localhost:8765"
+            res = send_to_vision_api(target_url, b64, query or "Describe what is on screen and what you observe.")
+            return res.get("response", res.get("error", "Vision analysis completed."))
+        except Exception as e:
+            return f"Vision analysis error: {e}"
+
+    @Slot(result=str)
+    def getClipboardText(self) -> str:
+        """Reads current Windows clipboard text directly."""
+        try:
+            return QApplication.clipboard().text()
+        except Exception:
+            return ""
 
 
 class JarvisWebEnginePage(QWebEnginePage):
@@ -1066,6 +1111,29 @@ class DesktopAIBubble(QWidget):
         if hasattr(self, "web_view") and self.web_view.page():
             self.web_view.page().runJavaScript(
                 f'window.dispatchEvent(new CustomEvent("jarvis-wake-activate", {{ detail: {{ phrase: "{phrase}" }} }}));'
+            )
+
+    def handle_clipboard_action(self, text: str):
+        """Pre-loads Windows clipboard text into Jarvis with quick-action chips and expands popup."""
+        if not text or not text.strip():
+            print("[DesktopAIBubble] Clipboard is empty or contains whitespace.")
+            return
+
+        if not self.isVisible():
+            self.show()
+        if not self.is_expanded:
+            self.expand_popup()
+        self.activateWindow()
+
+        # Emit over bridge
+        if hasattr(self, "bridge"):
+            self.bridge.clipboardActivated.emit(text)
+
+        # Dispatch DOM event directly into WebEngine page
+        if hasattr(self, "web_view") and self.web_view.page():
+            escaped = json.dumps(text)
+            self.web_view.page().runJavaScript(
+                f'window.dispatchEvent(new CustomEvent("jarvis-clipboard-activate", {{ detail: {{ text: {escaped} }} }}));'
             )
 
     def closeEvent(self, event):

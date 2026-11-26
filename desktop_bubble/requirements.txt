@@ -3,3 +3,5 @@ httpx>=0.25.0
 global-hotkeys>=0.1.7
 sounddevice>=0.4.6
 openwakeword>=0.5.1
+mss>=10.0.0
+Pillow>=10.0.0

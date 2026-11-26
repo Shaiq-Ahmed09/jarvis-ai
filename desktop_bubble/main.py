@@ -122,8 +122,8 @@ def main():
     tray_icon.setContextMenu(tray_menu)
     tray_icon.show()
 
-    # 3. Global Hotkey: Alt + Space
-    hotkey_mgr = HotkeyManager("Alt + Space")
+    # 3. Global Hotkeys: Alt + Space (Toggle) & Ctrl + Shift + Space (Clipboard Hook)
+    hotkey_mgr = HotkeyManager("Alt + Space / Ctrl + Shift + Space")
 
     def on_global_hotkey():
         """Brings overlay to front & expands popup, or collapses if already active."""
@@ -139,6 +139,14 @@ def main():
             bubble.expand_popup()
 
     hotkey_mgr.hotkey_triggered.connect(on_global_hotkey)
+
+    def on_clipboard_hotkey():
+        """Reads current Windows clipboard, expands bubble, and pre-loads into Jarvis."""
+        text = QApplication.clipboard().text()
+        print(f"[HotkeyManager] Ctrl + Shift + Space hook triggered! Clipboard: {len(text)} chars.")
+        bubble.handle_clipboard_action(text)
+
+    hotkey_mgr.clipboard_triggered.connect(on_clipboard_hotkey)
 
     # 4. Clean Shutdown Handling
     def on_shutdown():

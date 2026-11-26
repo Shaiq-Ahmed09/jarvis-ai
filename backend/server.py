@@ -2822,24 +2822,35 @@ async def api_hide_bubble():
     ok = stop_desktop_bubble()
     return {"status": "ok", "stopped": ok}
 
+from typing import Optional, Dict, Any
 from pydantic import BaseModel
 
 class ChatMessageRequest(BaseModel):
     message: str
+    image: Optional[str] = None
+
+class VisionAnalysisRequest(BaseModel):
+    query: Optional[str] = "Describe what is visible on Sir's screen and what you observe."
+    image: Optional[str] = None
 
 @app.post("/chat")
 async def api_post_chat(req: ChatMessageRequest):
-    """Direct POST /chat endpoint for Desktop AI Bubble and third-party integrations."""
+    """Direct POST /chat endpoint for Desktop AI Bubble and multimodal interactions."""
     user_text = req.message.strip()
-    if not user_text:
+    if not user_text and not req.image:
         return {"response": "I am standing by, Sir."}
     try:
         prompt_str = system_prompt(user_text)
+        contents = [prompt_str, f"User: {user_text or 'Inspect this attached screen image.'}"]
+        if req.image:
+            raw_bytes = base64.b64decode(req.image)
+            contents.append(types.Part.from_bytes(data=raw_bytes, mime_type="image/jpeg"))
+
         resp = await asyncio.to_thread(
             genai_client.models.generate_content,
             model=MODEL,
-            contents=[prompt_str, f"User: {user_text}"],
-            config=types.GenerateContentConfig(max_output_tokens=500, temperature=0.7)
+            contents=contents,
+            config=types.GenerateContentConfig(max_output_tokens=600, temperature=0.7)
         )
         reply = resp.text.strip() if resp and resp.text else "Command acknowledged, Sir."
         try:
@@ -2850,6 +2861,57 @@ async def api_post_chat(req: ChatMessageRequest):
         return {"response": reply}
     except Exception as e:
         return {"response": f"J.A.R.V.I.S.: Acknowledged '{user_text}'. (Core status: {e})"}
+
+@app.post("/api/vision")
+async def api_post_vision(req: VisionAnalysisRequest):
+    """Multimodal vision endpoint: analyzes desktop screen context or uploaded screenshot with Gemini Vision."""
+    query = (req.query or "Describe what is currently visible on the screen.").strip()
+    b64_img = req.image
+
+    # If no image provided in request payload, capture primary monitor directly
+    if not b64_img:
+        try:
+            from core.vision import capture_desktop
+            pil_img = capture_desktop()
+            w, h = pil_img.size
+            if w > 1280:
+                ratio = 1280.0 / float(w)
+                pil_img = pil_img.resize((1280, int(h * ratio)), Image.Resampling.LANCZOS)
+            buf = io.BytesIO()
+            pil_img.save(buf, format="JPEG", quality=80, optimize=True)
+            b64_img = base64.b64encode(buf.getvalue()).decode("utf-8")
+        except Exception as cap_err:
+            return {"error": f"Failed to capture screen: {cap_err}", "response": "Could not capture display, Sir."}
+
+    try:
+        raw_bytes = base64.b64decode(b64_img)
+        img_part = types.Part.from_bytes(data=raw_bytes, mime_type="image/jpeg")
+        prompt_str = system_prompt(f"Visual and on-screen context analysis for query: {query}")
+        
+        resp = await asyncio.to_thread(
+            genai_client.models.generate_content,
+            model=MODEL,
+            contents=[prompt_str, f"User: {query}", img_part],
+            config=types.GenerateContentConfig(max_output_tokens=650, temperature=0.5)
+        )
+        reply = resp.text.strip() if resp and resp.text else "Optical analysis complete, Sir."
+        try:
+            save_chat_message("user", f"[Screen Vision]: {query}")
+            save_chat_message("assistant", reply)
+        except Exception:
+            pass
+        return {"response": reply, "image": b64_img}
+    except Exception as e:
+        # Fallback to OCR analysis
+        try:
+            from core.vision import analyze_live_screen
+            ocr_res = await asyncio.to_thread(analyze_live_screen, query=query)
+            return {
+                "response": ocr_res.get("summary", f"Visual context analyzed. Detected {ocr_res.get('detected_count', 0)} UI elements."),
+                "image": ocr_res.get("image_b64", b64_img)
+            }
+        except Exception:
+            return {"response": f"Visual analysis error: {e}", "image": b64_img}
 
 @app.websocket("/ws")
 async def websocket_handler(ws: WebSocket):
@@ -2922,11 +2984,21 @@ async def websocket_handler(ws: WebSocket):
             msg_type = data.get("type")
             is_busy = session.current_task is not None and not session.current_task.done()
 
-            if msg_type == "task":
+            if msg_type in ("task", "text", "chat"):
+                user_msg = data.get("text", "")
+                img_data = data.get("image") or data.get("screen")
                 if is_busy:
                     await session.send_vocal_response("One moment, Sir. I am executing the previous command.")
                 else:
-                    session.current_task = asyncio.create_task(session.turn(data["text"]))
+                    if img_data:
+                        session.history.append({
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": f"User query: {user_msg}"},
+                                {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + img_data}}
+                            ]
+                        })
+                    session.current_task = asyncio.create_task(session.turn(user_msg))
 
             elif msg_type == "audio":
                 audio_b64 = data.get("data")

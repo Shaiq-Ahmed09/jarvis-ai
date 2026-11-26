@@ -407,6 +407,169 @@
     }
 
     /* =========================================================================
+       SCREEN VISION & CLIPBOARD CONTEXT HUD CARDS
+       ========================================================================= */
+    .clipboard-context-card {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      width: min(680px, 92vw);
+      background: rgba(10, 18, 34, 0.92);
+      border: 1px solid rgba(0, 240, 255, 0.45);
+      border-radius: 14px;
+      padding: 12px 16px;
+      backdrop-filter: blur(28px);
+      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.65), 0 0 24px rgba(0, 240, 255, 0.16);
+      animation: popWindowIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .clipboard-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .clipboard-card-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--cyan);
+      font-family: var(--font-code);
+      letter-spacing: 0.8px;
+    }
+
+    .clipboard-card-badge {
+      font-size: 10px;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.08);
+      padding: 2px 6px;
+      border-radius: 8px;
+      font-family: var(--font-code);
+    }
+
+    .clipboard-card-close {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 13px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .clipboard-card-close:hover {
+      color: var(--crimson);
+      background: rgba(239, 68, 68, 0.15);
+    }
+
+    .clipboard-card-body {
+      font-family: var(--font-code);
+      font-size: 11px;
+      line-height: 1.45;
+      color: #cbd5e1;
+      max-height: 85px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+      background: rgba(2, 6, 23, 0.7);
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .clipboard-card-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 2px;
+    }
+
+    .action-chip-btn {
+      background: rgba(0, 240, 255, 0.1);
+      border: 1px solid rgba(0, 240, 255, 0.35);
+      color: var(--cyan);
+      font-size: 11px;
+      font-family: var(--font-code);
+      padding: 6px 14px;
+      border-radius: 16px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      backdrop-filter: blur(12px);
+    }
+
+    .action-chip-btn:hover {
+      background: rgba(0, 240, 255, 0.25);
+      border-color: var(--cyan);
+      transform: translateY(-1px);
+      box-shadow: 0 0 14px var(--cyan-glow);
+    }
+
+    /* Screen Vision Context Chip */
+    .screen-vision-chip {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      width: min(680px, 92vw);
+      background: rgba(10, 24, 40, 0.88);
+      border: 1px solid rgba(0, 240, 255, 0.55);
+      border-radius: 12px;
+      padding: 6px 14px;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 18px rgba(0, 240, 255, 0.14);
+      animation: popWindowIn 0.2s ease forwards;
+    }
+
+    .screen-chip-content {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .screen-chip-thumb {
+      width: 40px;
+      height: 26px;
+      object-fit: cover;
+      border-radius: 4px;
+      border: 1px solid var(--cyan);
+      box-shadow: 0 0 8px var(--cyan-glow);
+    }
+
+    .screen-chip-text {
+      font-size: 11px;
+      font-family: var(--font-code);
+      font-weight: 600;
+      color: var(--cyan);
+      letter-spacing: 0.6px;
+    }
+
+    .screen-chip-remove {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 13px;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .screen-chip-remove:hover {
+      color: var(--crimson);
+    }
+
+    .island-btn.active-vision {
+      background: rgba(0, 240, 255, 0.25) !important;
+      border-color: var(--cyan) !important;
+      color: var(--cyan) !important;
+      box-shadow: 0 0 18px var(--cyan-glow) !important;
+    }
+
+    /* =========================================================================
        TOP FLOATING BAR (SETTINGS BUTTON & SYSTEM BADGES)
        ========================================================================= */
     #top-nav {
@@ -998,8 +1161,37 @@
     <!-- Live Status Label -->
     <div class="bubble-status" id="bubble-status">STANDBY // READY</div>
 
+    <!-- Clipboard Context Card (Ctrl + Shift + Space Hook) -->
+    <div id="clipboard-context-card" class="clipboard-context-card">
+      <div class="clipboard-card-header">
+        <div class="clipboard-card-title">
+          <span>📋 CLIPBOARD CONTEXT</span>
+          <span id="clipboard-preview-len" class="clipboard-card-badge"></span>
+        </div>
+        <button id="btn-close-clipboard" class="clipboard-card-close" title="Dismiss Context">✕</button>
+      </div>
+      <div id="clipboard-preview-text" class="clipboard-card-body"></div>
+      <div class="clipboard-card-actions">
+        <button class="action-chip-btn chip-explain" data-action="explain">💡 Explain</button>
+        <button class="action-chip-btn chip-fix" data-action="fix">🐛 Fix Bug</button>
+        <button class="action-chip-btn chip-summarize" data-action="summarize">📝 Summarize</button>
+      </div>
+    </div>
+
+    <!-- Screen Vision Context Chip -->
+    <div id="screen-vision-chip" class="screen-vision-chip">
+      <div class="screen-chip-content">
+        <img id="screen-vision-thumb" class="screen-chip-thumb" src="" alt="Screen thumbnail">
+        <span class="screen-chip-text">👁️ SCREEN CONTEXT ATTACHED</span>
+      </div>
+      <button id="btn-remove-screen" class="screen-chip-remove" title="Remove Screenshot">✕</button>
+    </div>
+
     <!-- Floating Glass Typing Bar -->
     <div class="typing-island">
+      <button class="island-btn" id="btn-screen-vision" title="Screen Vision (Capture & Analyze Desktop)">
+        👁️
+      </button>
       <button class="island-btn" id="btn-mic" title="Voice Input (Click to speak)">
         🎤
       </button>
@@ -1655,20 +1847,173 @@
       $('#lightbox-modal').classList.remove('active');
     };
 
+    // =========================================================================
+    // SCREEN VISION & CLIPBOARD CONTEXT STATE & HANDLERS
+    // =========================================================================
+    let attachedScreenB64 = null;
+    let attachedClipboardText = null;
+
+    function attachScreenVision(b64) {
+      if (!b64) return;
+      attachedScreenB64 = b64;
+      const chip = $('#screen-vision-chip');
+      const thumb = $('#screen-vision-thumb');
+      const btn = $('#btn-screen-vision');
+      if (thumb) thumb.src = 'data:image/jpeg;base64,' + b64;
+      if (chip) chip.style.display = 'flex';
+      if (btn) btn.classList.add('active-vision');
+      addDrawerLog('Desktop Screen Vision context captured and attached to prompt.');
+    }
+
+    function detachScreenVision() {
+      attachedScreenB64 = null;
+      const chip = $('#screen-vision-chip');
+      const btn = $('#btn-screen-vision');
+      if (chip) chip.style.display = 'none';
+      if (btn) btn.classList.remove('active-vision');
+    }
+
+    if ($('#btn-remove-screen')) {
+      $('#btn-remove-screen').onclick = detachScreenVision;
+    }
+
+    if ($('#btn-screen-vision')) {
+      $('#btn-screen-vision').onclick = () => {
+        if (attachedScreenB64) {
+          detachScreenVision();
+          return;
+        }
+        addDrawerLog('Capturing desktop display context via QWebChannel...');
+        if (window.jarvisDesktop && typeof window.jarvisDesktop.captureActiveScreen === 'function') {
+          try {
+            window.jarvisDesktop.captureActiveScreen(function(b64) {
+              if (b64) attachScreenVision(b64);
+            });
+          } catch(e) {
+            console.error('Screen capture bridge error:', e);
+          }
+        } else {
+          // HTTP API fallback
+          fetch(`${API_BASE}/api/vision`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ query: 'Capture screen context' })
+          })
+            .then(r => r.json())
+            .then(data => {
+              if (data.image) attachScreenVision(data.image);
+            })
+            .catch(() => {
+              sendWS({ type: 'task', text: 'look' });
+            });
+        }
+      };
+    }
+
+    // Selected Text / Clipboard Hook
+    function handleClipboardContext(text) {
+      if (!text || !text.trim()) return;
+      attachedClipboardText = text.trim();
+      const card = $('#clipboard-context-card');
+      const preview = $('#clipboard-preview-text');
+      const lenBadge = $('#clipboard-preview-len');
+      if (lenBadge) lenBadge.textContent = `(${attachedClipboardText.length} chars)`;
+      if (preview) preview.textContent = attachedClipboardText;
+      if (card) card.style.display = 'flex';
+
+      const input = $('#user-input');
+      if (input) {
+        input.focus();
+        input.placeholder = "Ask about this clipboard text or select a quick action...";
+      }
+      addDrawerLog(`Clipboard context loaded (${attachedClipboardText.length} chars).`);
+    }
+
+    function dismissClipboardContext() {
+      attachedClipboardText = null;
+      const card = $('#clipboard-context-card');
+      if (card) card.style.display = 'none';
+      const input = $('#user-input');
+      if (input) input.placeholder = "Ask J.A.R.V.I.S. anything, Sir...";
+    }
+
+    if ($('#btn-close-clipboard')) {
+      $('#btn-close-clipboard').onclick = dismissClipboardContext;
+    }
+
+    // Quick-Action Chips for Clipboard Context
+    $$('.action-chip-btn').forEach(btn => {
+      btn.onclick = () => {
+        if (!attachedClipboardText) return;
+        const action = btn.dataset.action;
+        let promptText = '';
+        if (action === 'explain') {
+          promptText = `Explain the following text/code in detail:\n\n\`\`\`\n${attachedClipboardText}\n\`\`\``;
+        } else if (action === 'fix') {
+          promptText = `Identify any bugs, issues, or edge cases in this code and provide the corrected version:\n\n\`\`\`\n${attachedClipboardText}\n\`\`\``;
+        } else if (action === 'summarize') {
+          promptText = `Provide a concise executive summary of the following text:\n\n${attachedClipboardText}`;
+        }
+
+        const screenImg = attachedScreenB64;
+        dismissClipboardContext();
+        detachScreenVision();
+        setOrbState('thinking');
+
+        const tempId = `clip_${Date.now()}`;
+        spawnOrUpdateResultWindow(tempId, 'Analyzing clipboard directive...', promptText, screenImg ? `data:image/jpeg;base64,${screenImg}` : null);
+        sendWS({
+          type: 'text',
+          text: promptText,
+          image: screenImg || undefined
+        });
+      };
+    });
+
+    // Window Events for Bridge Notifications
+    window.addEventListener('jarvis-clipboard-activate', e => {
+      if (e.detail && e.detail.text) {
+        handleClipboardContext(e.detail.text);
+      }
+    });
+
+    window.addEventListener('jarvis-screen-captured', e => {
+      if (e.detail && e.detail.image) {
+        attachScreenVision(e.detail.image);
+      }
+    });
+
     // User Input Dispatch
     function sendUserInput() {
       const input = $('#user-input');
-      const text = input.value.trim();
-      if (!text) return;
+      let text = input.value.trim();
+      const screenImg = attachedScreenB64;
+      const clipTxt = attachedClipboardText;
+
+      if (!text && !screenImg && !clipTxt) return;
+
+      if (clipTxt && !text.includes(clipTxt)) {
+        text = text ? `${text}\n\n[Context from Clipboard]:\n${clipTxt}` : `Analyze the following context:\n\n${clipTxt}`;
+      }
+
+      if (!text && screenImg) {
+        text = "Analyze my current screen and describe what you observe.";
+      }
 
       input.value = '';
+      dismissClipboardContext();
+      detachScreenVision();
       setOrbState('thinking');
 
       // Create a speculative placeholder window instantly
       const tempId = `query_${Date.now()}`;
-      spawnOrUpdateResultWindow(tempId, 'Computing neural response...', text);
+      spawnOrUpdateResultWindow(tempId, 'Computing neural response...', text, screenImg ? `data:image/jpeg;base64,${screenImg}` : null);
 
-      sendWS({ type: 'text', text: text });
+      sendWS({
+        type: 'text',
+        text: text,
+        image: screenImg || undefined
+      });
     }
 
     $('#btn-send').onclick = sendUserInput;
@@ -2090,6 +2435,18 @@
           if (window.jarvisDesktop.wakeTriggered && typeof window.jarvisDesktop.wakeTriggered.connect === 'function') {
             window.jarvisDesktop.wakeTriggered.connect(function(phrase) {
               handleWakeWordActivation(phrase);
+            });
+          }
+          // Connect to screenCaptured signal
+          if (window.jarvisDesktop.screenCaptured && typeof window.jarvisDesktop.screenCaptured.connect === 'function') {
+            window.jarvisDesktop.screenCaptured.connect(function(b64) {
+              attachScreenVision(b64);
+            });
+          }
+          // Connect to clipboardActivated signal
+          if (window.jarvisDesktop.clipboardActivated && typeof window.jarvisDesktop.clipboardActivated.connect === 'function') {
+            window.jarvisDesktop.clipboardActivated.connect(function(text) {
+              handleClipboardContext(text);
             });
           }
         });
