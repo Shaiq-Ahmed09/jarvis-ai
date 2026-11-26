@@ -27,7 +27,10 @@ def resolve_input_device(label_substring: str = None) -> int:
     try:
         import sounddevice as sd
         devices = sd.query_devices()
-        default_in = sd.default.device[0] if isinstance(sd.default.device, (list, tuple)) else sd.default.device
+        try:
+            default_in = int(sd.default.device[0])
+        except Exception:
+            default_in = 0
 
         if not label_substring or label_substring.strip() == "":
             return default_in if default_in is not None and default_in >= 0 else 0
