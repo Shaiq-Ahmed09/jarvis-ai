@@ -7,6 +7,7 @@ import base64
 import hashlib
 import json
 import os
+from pathlib import Path
 import secrets
 import time
 from typing import Dict, List, Optional, Any
@@ -16,7 +17,9 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives import hashes
 
 # Persistent storage directory for P2P credentials & logs
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+_p = Path(__file__).resolve().parent
+HERE = _p.parent.parent if _p.parent.name == "backend" else _p.parent
+DATA_DIR = str(HERE / "data")
 P2P_STATE_FILE = os.path.join(DATA_DIR, "p2p_mesh_state.json")
 
 # Local Workstation Node Identity

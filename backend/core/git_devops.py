@@ -7,7 +7,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
-HERE = Path(__file__).resolve().parent.parent
+_p = Path(__file__).resolve().parent
+HERE = _p.parent.parent if _p.parent.name == "backend" else _p.parent
 LOCAL_GH = HERE / "tools" / "gh" / "gh.exe"
 LOCAL_GIT = HERE / "tools" / "git" / "cmd" / "git.exe"
 

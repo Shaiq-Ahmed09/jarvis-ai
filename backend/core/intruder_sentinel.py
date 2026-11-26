@@ -10,7 +10,8 @@ from datetime import datetime
 from pathlib import Path
 import cv2
 
-HERE = Path(__file__).resolve().parent.parent
+_p = Path(__file__).resolve().parent
+HERE = _p.parent.parent if _p.parent.name == "backend" else _p.parent
 INTRUDER_DIR = HERE / "data" / "intruders"
 
 class IntruderSentinel:

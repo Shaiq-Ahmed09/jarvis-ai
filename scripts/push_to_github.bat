@@ -1,7 +1,7 @@
 @echo off
 setlocal
-cd /d "%~dp0"
-set PATH=%~dp0tools\git\cmd;%~dp0tools\gh;%PATH%
+cd /d "%~dp0.."
+set PATH=%~dp0..\tools\git\cmd;%~dp0..\tools\gh;%PATH%
 
 title J.A.R.V.I.S. GitHub Sync Protocol
 color 0b

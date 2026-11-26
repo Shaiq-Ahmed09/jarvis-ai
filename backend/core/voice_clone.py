@@ -11,13 +11,16 @@ import io
 import json
 import math
 import os
+from pathlib import Path
 import time
 from typing import Dict, List, Optional, Any
 
 import edge_tts
 import numpy as np
 
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+_p = Path(__file__).resolve().parent
+HERE = _p.parent.parent if _p.parent.name == "backend" else _p.parent
+DATA_DIR = str(HERE / "data")
 VOICE_PROFILE_FILE = os.path.join(DATA_DIR, "voice_profiles.json")
 
 DEFAULT_PROFILES = {

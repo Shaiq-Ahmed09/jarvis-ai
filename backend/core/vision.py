@@ -8,6 +8,8 @@ import base64
 import ctypes
 import difflib
 import io
+import json
+import os
 import re
 import sys
 import time
@@ -17,6 +19,10 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageGrab
 import pyautogui
+import pyperclip
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Module-level cached OCR engine for zero reload overhead
 _OCR_ENGINE = None
@@ -290,3 +296,225 @@ def click_element_action(
         "image_b64": hud_b64,
         "latency_ms": total_lat
     }
+
+def click_and_type_action(
+    text_label: str,
+    text_to_type: str,
+    press_enter: bool = True,
+    clear_field: bool = False,
+    downscale: float = 0.55
+) -> Dict[str, Any]:
+    """Locate on-screen input field or element by text label, click to focus, and type text."""
+    t0 = time.perf_counter()
+    best_el, elements, pil_img, _ = find_element_by_label(text_label, downscale=downscale)
+    
+    if not best_el:
+        hud_b64 = render_hud_visual_telemetry(pil_img, elements, highlight_target=None)
+        labels_preview = [e["text"] for e in elements[:12]]
+        return {
+            "success": False,
+            "error": f"Target element '{text_label}' not found on display.",
+            "detected_labels": labels_preview,
+            "image_b64": hud_b64,
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 1)
+        }
+
+    cx, cy = best_el["center"]
+    pyautogui.click(cx, cy)
+    time.sleep(0.15)
+
+    if clear_field:
+        pyautogui.hotkey("ctrl", "a")
+        pyautogui.press("backspace")
+        time.sleep(0.05)
+
+    # Use clipboard paste for instant, Unicode-safe typing
+    try:
+        pyperclip.copy(text_to_type)
+        pyautogui.hotkey("ctrl", "v")
+    except Exception:
+        pyautogui.typewrite(text_to_type, interval=0.02)
+
+    if press_enter:
+        time.sleep(0.1)
+        pyautogui.press("enter")
+
+    hud_b64 = render_hud_visual_telemetry(pil_img, elements, highlight_target=best_el)
+    lat = round((time.perf_counter() - t0) * 1000, 1)
+
+    return {
+        "success": True,
+        "element": best_el,
+        "clicked_at": (cx, cy),
+        "typed": text_to_type,
+        "enter_pressed": press_enter,
+        "image_b64": hud_b64,
+        "latency_ms": lat
+    }
+
+def analyze_live_screen(
+    query: str = "Describe what is currently visible on the active display, active applications, text, buttons, and context.",
+    pil_img: Optional[Image.Image] = None,
+    downscale: float = 0.55
+) -> Dict[str, Any]:
+    """Capture screen, run RapidOCR to identify all UI coordinates, and use Multimodal Gemini Vision to describe/read the screen."""
+    t0 = time.perf_counter()
+    if pil_img is None:
+        pil_img = capture_desktop()
+
+    elements, _, ocr_lat = detect_ui_elements(pil_img, downscale=downscale)
+    hud_b64 = render_hud_visual_telemetry(pil_img, elements)
+
+    # Compile OCR elements summary for precision
+    labels_summary = "\n".join([f"- '{e['text']}' at screen position {e['center']}" for e in elements[:50]])
+
+    # Initialize Gemini multimodal client
+    api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+    analysis_text = ""
+
+    if api_key:
+        try:
+            from google import genai
+            client = genai.Client(api_key=api_key)
+            prompt = (
+                f"You are J.A.R.V.I.S., the advanced AI assistant looking directly at Sir's live desktop screen.\n"
+                f"User request: '{query}'\n\n"
+                f"Instructions:\n"
+                f"1. Explain what is visible on the screen clearly and concisely in Stark Industries J.A.R.V.I.S. persona.\n"
+                f"2. Read any relevant text, code, titles, messages, or numbers Sir asked for.\n"
+                f"3. Highlight key interactive elements, buttons, or open tabs Sir can click or interact with.\n\n"
+                f"Prominent on-screen UI text elements detected by high-speed neural OCR:\n{labels_summary}"
+            )
+            # Resize image to reasonable size for vision API (max 1920 width)
+            w, h = pil_img.size
+            if w > 1920:
+                scale_ratio = 1920.0 / w
+                send_img = pil_img.resize((1920, int(h * scale_ratio)), Image.Resampling.BILINEAR)
+            else:
+                send_img = pil_img
+
+            # Try models in order of capability
+            models_to_try = [
+                os.getenv("JARVIS_VISION_MODEL", "gemini-3.5-flash-lite"),
+                "gemini-2.5-flash",
+                "gemini-flash-latest"
+            ]
+            for m in models_to_try:
+                try:
+                    resp = client.models.generate_content(
+                        model=m,
+                        contents=[send_img, prompt]
+                    )
+                    if resp and resp.text:
+                        analysis_text = resp.text.strip()
+                        break
+                except Exception:
+                    continue
+        except Exception as e:
+            analysis_text = f"Visual multimodal pipeline encountered: {e}. Falling back to neural OCR mapping."
+
+    if not analysis_text:
+        # Fallback to local OCR synthesis if offline
+        sample_texts = [e["text"] for e in elements[:20]]
+        analysis_text = (
+            f"Optical scan mapped {len(elements)} interactive UI elements across your display.\n"
+            f"Prominent visible text:\n" + "\n".join([f"• {t}" for t in sample_texts])
+        )
+
+    lat = round((time.perf_counter() - t0) * 1000, 1)
+    return {
+        "success": True,
+        "query": query,
+        "analysis": analysis_text,
+        "detected_count": len(elements),
+        "elements": [f"'{e['text']}' at {e['center']}" for e in elements[:30]],
+        "image_b64": hud_b64,
+        "latency_ms": lat
+    }
+
+def autonomous_navigate_step(
+    goal: str,
+    history: Optional[List[Dict[str, Any]]] = None,
+    downscale: float = 0.55
+) -> Dict[str, Any]:
+    """Execute one autonomous perception-action step towards achieving a desktop goal.
+    
+    Captures live screen, detects UI elements, prompts Gemini to decide the next action,
+    executes it (click, type, scroll, hotkey), and returns telemetry.
+    """
+    t0 = time.perf_counter()
+    pil_img = capture_desktop()
+    elements, _, _ = detect_ui_elements(pil_img, downscale=downscale)
+
+    api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return {"success": False, "error": "No API key configured for autonomous visual reasoning."}
+
+    from google import genai
+    client = genai.Client(api_key=api_key)
+
+    elements_list = [{"text": e["text"], "center": e["center"]} for e in elements[:60]]
+    history_str = json.dumps(history[-3:] if history else [], indent=2)
+
+    prompt = (
+        f"You are the visual navigation brain of J.A.R.V.I.S. controlling a Windows desktop.\n"
+        f"Goal: {goal}\n"
+        f"Previous steps taken: {history_str}\n\n"
+        f"Detected visible UI elements on screen (with coordinates):\n{json.dumps(elements_list, indent=2)}\n\n"
+        f"Choose the single next logical action to take to achieve the goal. Respond ONLY in valid JSON with this format:\n"
+        f"{{\n"
+        f'  "action": "click" | "type" | "hotkey" | "scroll" | "done",\n'
+        f'  "target_label": "exact text label to click or focus",\n'
+        f'  "text_to_type": "string to type if action is type",\n'
+        f'  "keys": "e.g. enter, ctrl+t, esc if action is hotkey",\n'
+        f'  "direction": "up" | "down" if action is scroll,\n'
+        f'  "thought": "brief 1-sentence reasoning for this step"\n'
+        f"}}"
+    )
+
+    try:
+        resp = client.models.generate_content(
+            model=os.getenv("JARVIS_VISION_MODEL", "gemini-3.5-flash-lite"),
+            contents=[pil_img, prompt]
+        )
+        text = resp.text.strip()
+        # Clean markdown codeblocks
+        if text.startswith("```"):
+            text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
+            text = re.sub(r"\n?```$", "", text)
+        decision = json.loads(text.strip())
+    except Exception as e:
+        decision = {"action": "done", "thought": f"Could not determine next visual step: {e}"}
+
+    action = decision.get("action", "done")
+    step_result = {"decision": decision, "action": action, "thought": decision.get("thought", "")}
+
+    if action == "click":
+        target = decision.get("target_label", "")
+        res = click_element_action(target)
+        step_result["execution"] = res
+    elif action == "type":
+        target = decision.get("target_label", "")
+        txt = decision.get("text_to_type", "")
+        res = click_and_type_action(target, txt, press_enter=True)
+        step_result["execution"] = res
+    elif action == "hotkey":
+        keys = decision.get("keys", "enter").split("+")
+        pyautogui.hotkey(*[k.strip().lower() for k in keys])
+        step_result["execution"] = f"Pressed hotkey {keys}"
+    elif action == "scroll":
+        direction = decision.get("direction", "down")
+        amt = -400 if direction == "down" else 400
+        pyautogui.scroll(amt)
+        step_result["execution"] = f"Scrolled {direction}"
+    elif action == "done":
+        step_result["execution"] = "Goal completed or terminal state reached."
+
+    # Capture after-action screenshot
+    after_img = capture_desktop()
+    hud_b64 = render_hud_visual_telemetry(after_img, elements)
+    step_result["image_b64"] = hud_b64
+    step_result["latency_ms"] = round((time.perf_counter() - t0) * 1000, 1)
+    step_result["success"] = True
+
+    return step_result

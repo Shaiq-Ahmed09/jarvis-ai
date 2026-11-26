@@ -9,7 +9,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
-HERE = Path(__file__).resolve().parent.parent
+_p = Path(__file__).resolve().parent
+HERE = _p.parent.parent if _p.parent.name == "backend" else _p.parent
 
 from core.system_hands import open_in_vscode, send_keys_to_vscode
 

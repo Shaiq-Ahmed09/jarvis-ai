@@ -19,6 +19,7 @@ build/
 # J.A.R.V.I.S. Local Databases, Vector Memory & Cached Sessions
 data/
 cortex_db/
+archive/
 
 # Portable Binaries & Development Tools
 tools/

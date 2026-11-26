@@ -16,7 +16,8 @@ from typing import Dict, List, Optional, Tuple, Any
 import chromadb
 import numpy as np
 
-HERE = Path(__file__).parent.parent
+_p = Path(__file__).resolve().parent
+HERE = _p.parent.parent if _p.parent.name == "backend" else _p.parent
 CORTEX_DIR = HERE / "cortex_db"
 MEMORY_JSON = HERE / "memory.json"
 

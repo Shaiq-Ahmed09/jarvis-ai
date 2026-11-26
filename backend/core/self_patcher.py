@@ -7,13 +7,16 @@ import ast
 import difflib
 import json
 import os
+from pathlib import Path
 import py_compile
 import shutil
 import tempfile
 import time
 from typing import Dict, List, Optional, Any, Tuple
 
-WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_p = Path(__file__).resolve().parent
+HERE = _p.parent.parent if _p.parent.name == "backend" else _p.parent
+WORKSPACE_DIR = str(HERE)
 DATA_DIR = os.path.join(WORKSPACE_DIR, "data")
 PATCHES_BACKUP_DIR = os.path.join(DATA_DIR, "backups", "patches")
 PATCH_HISTORY_FILE = os.path.join(DATA_DIR, "patch_history.json")

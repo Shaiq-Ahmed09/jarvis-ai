@@ -10,7 +10,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent.parent
+_p = Path(__file__).resolve().parent
+HERE = _p.parent.parent if _p.parent.name == "backend" else _p.parent
 DATA_DIR = HERE / "data"
 DB_PATH = DATA_DIR / "jarvis.db"
 
