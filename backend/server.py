@@ -2803,6 +2803,35 @@ async def api_hide_bubble():
     ok = stop_desktop_bubble()
     return {"status": "ok", "stopped": ok}
 
+from pydantic import BaseModel
+
+class ChatMessageRequest(BaseModel):
+    message: str
+
+@app.post("/chat")
+async def api_post_chat(req: ChatMessageRequest):
+    """Direct POST /chat endpoint for Desktop AI Bubble and third-party integrations."""
+    user_text = req.message.strip()
+    if not user_text:
+        return {"response": "I am standing by, Sir."}
+    try:
+        prompt_str = system_prompt(user_text)
+        resp = await asyncio.to_thread(
+            genai_client.models.generate_content,
+            model="gemini-2.5-flash",
+            contents=[prompt_str, f"User: {user_text}"],
+            config=types.GenerateContentConfig(max_output_tokens=500, temperature=0.7)
+        )
+        reply = resp.text.strip() if resp and resp.text else "Command acknowledged, Sir."
+        try:
+            save_chat_message("user", user_text)
+            save_chat_message("assistant", reply)
+        except Exception:
+            pass
+        return {"response": reply}
+    except Exception as e:
+        return {"response": f"J.A.R.V.I.S.: Acknowledged '{user_text}'. (Core status: {e})"}
+
 @app.websocket("/ws")
 async def websocket_handler(ws: WebSocket):
     await ws.accept()

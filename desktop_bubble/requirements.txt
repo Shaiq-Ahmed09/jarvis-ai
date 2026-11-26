@@ -1,0 +1,3 @@
+PySide6>=6.5.0
+httpx>=0.25.0
+global-hotkeys>=0.1.7
