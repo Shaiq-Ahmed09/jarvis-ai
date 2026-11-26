@@ -2720,6 +2720,44 @@ async def proxy_image(url: str):
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
 
+_desktop_bubble_proc = None
+
+def launch_desktop_bubble() -> bool:
+    global _desktop_bubble_proc
+    try:
+        if _desktop_bubble_proc is not None and _desktop_bubble_proc.poll() is None:
+            return True  # Already running
+        python_exe = sys.executable
+        pythonw = Path(python_exe).parent / "pythonw.exe"
+        exe = str(pythonw) if pythonw.exists() else python_exe
+        script = str(ROOT_DIR / "backend" / "overlay.py")
+        _desktop_bubble_proc = subprocess.Popen([exe, script])
+        return True
+    except Exception as e:
+        print(f"Error launching desktop bubble: {e}")
+        return False
+
+def stop_desktop_bubble() -> bool:
+    global _desktop_bubble_proc
+    if _desktop_bubble_proc is not None and _desktop_bubble_proc.poll() is None:
+        try:
+            _desktop_bubble_proc.terminate()
+            _desktop_bubble_proc = None
+            return True
+        except Exception:
+            pass
+    return False
+
+@app.get("/api/bubble/show")
+async def api_show_bubble():
+    ok = launch_desktop_bubble()
+    return {"status": "ok", "launched": ok}
+
+@app.get("/api/bubble/hide")
+async def api_hide_bubble():
+    ok = stop_desktop_bubble()
+    return {"status": "ok", "stopped": ok}
+
 @app.websocket("/ws")
 async def websocket_handler(ws: WebSocket):
     await ws.accept()
@@ -2842,6 +2880,16 @@ async def websocket_handler(ws: WebSocket):
                     st = dm_auto.get_status()
                     state = "ACTIVE" if st["enabled"] else "STANDBY"
                     await session.send(type="log", text=f"📲 Instagram DM Automation: {state} | Last scan: {st['last_scan'] or 'N/A'} | Replies: {st['total_replied']}")
+
+            elif msg_type == "show_desktop_bubble":
+                launched = launch_desktop_bubble()
+                await session.send(type="log", text="🔮 Desktop Sentinel Bubble activated on Windows screen.")
+                await session.send(type="bubble_status", active=True, launched=launched)
+
+            elif msg_type == "hide_desktop_bubble":
+                stopped = stop_desktop_bubble()
+                await session.send(type="log", text="🔮 Desktop Sentinel Bubble dismissed.")
+                await session.send(type="bubble_status", active=False, stopped=stopped)
 
             elif msg_type == "set_chat_persona":
                 p = (data.get("persona") or "radon").lower().strip()
